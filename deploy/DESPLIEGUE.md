@@ -103,7 +103,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now europio
 
 sudo systemctl status europio          # debe estar "active (running)"
-curl -s http://127.0.0.1:8000/health   # {"status":"ok","app":"europio"}
+curl -s http://127.0.0.1:8001/health   # {"status":"ok","app":"europio"}
 ```
 
 Logs: `sudo journalctl -u europio -f`
