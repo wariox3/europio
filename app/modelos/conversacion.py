@@ -1,0 +1,20 @@
+from datetime import datetime, timezone
+
+from sqlalchemy import Column, DateTime, Integer, String
+
+from app.core.db import Base
+
+
+def _ahora() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class Conversacion(Base):
+    __tablename__ = "conversaciones"
+
+    id = Column(Integer, primary_key=True)
+    telefono = Column(String(20), nullable=False, index=True)
+    empresa_id = Column(Integer, nullable=True)
+    estado = Column(String(30), default="inicio")
+    creado_en = Column(DateTime(timezone=True), default=_ahora)
+    actualizado_en = Column(DateTime(timezone=True), default=_ahora, onupdate=_ahora)
