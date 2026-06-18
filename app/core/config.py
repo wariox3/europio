@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     whatsapp_verify_token: str = ""
     whatsapp_api_version: str = "v21.0"
     whatsapp_app_secret: str = ""  # para verificar la firma del webhook (X-Hub-Signature-256)
+    whatsapp_app_id: str = ""      # App ID (no secreto); usado por el diagnóstico (debug_token)
 
     # Seguridad del panel admin
     admin_api_key: str = ""  # clave requerida en el header X-API-Key para /admin
