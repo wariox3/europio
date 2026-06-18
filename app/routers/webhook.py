@@ -40,9 +40,10 @@ async def verificar_webhook(request: Request) -> Response:
     return Response(status_code=403)
 
 
-def _extraer_mensaje(payload: dict) -> tuple[str, str, str] | None:
+def _extraer_mensaje(payload: dict) -> tuple[str, str | None, str] | None:
     """Extrae (telefono, texto, wamid) del payload de WhatsApp.
 
+    `texto` es None cuando el mensaje no es de texto (audio, video, imagen, etc.).
     `wamid` es el id único del mensaje (para deduplicar reintentos).
     Devuelve None para eventos que no son mensajes (p. ej. estados de entrega).
     """
@@ -61,7 +62,7 @@ def _extraer_mensaje(payload: dict) -> tuple[str, str, str] | None:
             inter = msg["interactive"]
             reply = inter.get(inter.get("type"), {})  # list_reply | button_reply
             return telefono, reply.get("id", ""), wamid
-        return telefono, "", wamid
+        return telefono, None, wamid  # audio, video, imagen, ubicación, etc.
     except (KeyError, IndexError, TypeError):
         return None
 

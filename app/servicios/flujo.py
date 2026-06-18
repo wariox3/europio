@@ -172,15 +172,29 @@ async def _ir_a_menu(conv: Conversacion, telefono: str, db: Session, empresa_id:
 
 # --- máquina de estados -------------------------------------------------------
 
-async def procesar_mensaje(telefono: str, texto: str, db: Session, wamid: str | None = None) -> None:
+async def procesar_mensaje(telefono: str, texto: str | None, db: Session, wamid: str | None = None) -> None:
     conv = obtener_o_crear_conversacion(db, telefono)
+
+    # texto None => mensaje no de texto (audio, video, imagen, ubicación...).
+    es_no_texto = texto is None
+    texto_registro = "[mensaje no de texto]" if es_no_texto else texto
 
     # Registra el entrante. Si el wamid ya existe (reintento de WhatsApp), se descarta.
     try:
-        registrar_mensaje(db, telefono, "entrante", texto, wamid)
+        registrar_mensaje(db, telefono, "entrante", texto_registro, wamid)
     except IntegrityError:
         db.rollback()
         logger.info("Mensaje duplicado (wamid=%s) descartado.", wamid)
+        return
+
+    # Si no es texto, pide texto y no altera el estado de la conversación.
+    if es_no_texto:
+        await _responder(
+            db,
+            telefono,
+            "Por ahora solo puedo leer mensajes de texto 🙏. Por favor escríbeme "
+            "tu consulta en un mensaje escrito.",
+        )
         return
 
     # Reinicia si la conversación ya terminó o quedó inactiva mucho tiempo.
