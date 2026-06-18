@@ -15,7 +15,10 @@ async def _post(payload: dict) -> None:
     headers = {"Authorization": f"Bearer {settings.whatsapp_token}"}
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(settings.whatsapp_api_url, json=payload, headers=headers)
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            # Registra el detalle del error de la API de Meta (token inválido, etc.).
+            logger.error("WhatsApp API %s: %s", resp.status_code, resp.text)
+            resp.raise_for_status()
 
 
 async def enviar_mensaje(telefono: str, texto: str) -> None:

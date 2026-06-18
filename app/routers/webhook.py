@@ -1,9 +1,13 @@
+import logging
+
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import get_db
 from app.servicios.flujo import procesar_mensaje
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["whatsapp"])
 
@@ -51,6 +55,10 @@ async def recibir_webhook(request: Request, db: Session = Depends(get_db)) -> di
     extraido = _extraer_mensaje(payload)
     if extraido:
         telefono, texto = extraido
-        await procesar_mensaje(telefono, texto, db)
+        try:
+            await procesar_mensaje(telefono, texto, db)
+        except Exception:
+            # No propagamos: si devolvemos error, WhatsApp reintentaría la entrega.
+            logger.exception("Error procesando mensaje de %s", telefono)
     # WhatsApp espera siempre 200 para no reintentar la entrega.
     return {"status": "ok"}
