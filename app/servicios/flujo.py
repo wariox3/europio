@@ -174,6 +174,22 @@ async def _ir_a_menu(conv: Conversacion, telefono: str, db: Session, empresa_id:
     db.commit()
 
 
+async def _escalar_empresa(conv: Conversacion, telefono: str, db: Session, texto: str) -> None:
+    """No se pudo identificar la empresa tras varios intentos: escala y finaliza."""
+    crear_escalamiento(db, telefono, None, "empresa_no_identificada", texto)
+    conv.estado = "finalizada"
+    conv.cerrada_en = _ahora()
+    conv.intentos = 0
+    conv.opciones = None
+    db.commit()
+    await _responder(
+        db,
+        telefono,
+        "No logré identificar tu empresa. 😕 No te preocupes: le paso "
+        "tu caso a un asesor para que te contacte pronto.",
+    )
+
+
 # --- máquina de estados -------------------------------------------------------
 
 async def procesar_mensaje(telefono: str, texto: str | None, db: Session, wamid: str | None = None) -> None:
@@ -220,15 +236,23 @@ async def procesar_mensaje(telefono: str, texto: str | None, db: Session, wamid:
         return
 
     if conv.estado in ("esperando_empresa", "confirmando_empresa"):
-        # En la lista de candidatas, "0" = "no está en la lista" → volver a pedir el nombre.
+        # En la lista de candidatas, "0" = "no está en la lista". Consume intento
+        # (para no quedar en bucle) y, si se acaban, escala.
         if conv.estado == "confirmando_empresa" and texto.strip() == "0":
-            conv.estado = "esperando_empresa"
-            conv.opciones = None
-            db.commit()
-            await _responder(
-                db, telefono,
-                "De acuerdo 🙌 Escríbeme de nuevo el *nombre de tu empresa*, por favor.",
-            )
+            conv.intentos = (conv.intentos or 0) + 1
+            if conv.intentos >= MAX_INTENTOS_EMPRESA:
+                await _escalar_empresa(conv, telefono, db, texto)
+            else:
+                conv.estado = "esperando_empresa"
+                conv.opciones = None
+                db.commit()
+                restantes = MAX_INTENTOS_EMPRESA - conv.intentos
+                await _responder(
+                    db, telefono,
+                    "De acuerdo 🙌 Escríbeme de nuevo el *nombre de tu empresa*. "
+                    f"(Te {'queda' if restantes == 1 else 'quedan'} {restantes} "
+                    f"intento{'' if restantes == 1 else 's'}.)",
+                )
             return
 
         # ¿Eligió por número una de las empresas que le ofrecimos?
@@ -244,7 +268,6 @@ async def procesar_mensaje(telefono: str, texto: str | None, db: Session, wamid:
             await _ir_a_menu(conv, telefono, db, resultado["match"])
         elif resultado["candidatos"]:
             conv.estado = "confirmando_empresa"
-            conv.intentos = 0  # mostrar candidatos es avance: reinicia el contador
             ids = await enviar_opciones_empresas(telefono, resultado["candidatos"], db)
             _guardar_opciones(conv, ids)
             db.commit()
@@ -252,18 +275,7 @@ async def procesar_mensaje(telefono: str, texto: str | None, db: Session, wamid:
             # No se reconoció: cicla hasta MAX_INTENTOS_EMPRESA y luego escala.
             conv.intentos = (conv.intentos or 0) + 1
             if conv.intentos >= MAX_INTENTOS_EMPRESA:
-                crear_escalamiento(db, telefono, None, "empresa_no_identificada", texto)
-                conv.estado = "finalizada"
-                conv.cerrada_en = _ahora()
-                conv.intentos = 0
-                conv.opciones = None
-                db.commit()
-                await _responder(
-                    db,
-                    telefono,
-                    "No logré identificar tu empresa. 😕 No te preocupes: le paso "
-                    "tu caso a un asesor para que te contacte pronto.",
-                )
+                await _escalar_empresa(conv, telefono, db, texto)
             else:
                 restantes = MAX_INTENTOS_EMPRESA - conv.intentos
                 db.commit()
