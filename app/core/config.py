@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     whatsapp_phone_number_id: str = ""
     whatsapp_verify_token: str = ""
     whatsapp_api_version: str = "v21.0"
+    whatsapp_app_secret: str = ""  # para verificar la firma del webhook (X-Hub-Signature-256)
+
+    # Seguridad del panel admin
+    admin_api_key: str = ""  # clave requerida en el header X-API-Key para /admin
 
     @property
     def whatsapp_api_url(self) -> str:

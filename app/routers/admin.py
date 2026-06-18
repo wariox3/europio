@@ -1,12 +1,24 @@
-from fastapi import APIRouter, Depends, HTTPException
+import secrets
+
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.db import get_db
 from app.modelos.empresa import Empresa
 from app.modelos.faq import Faq
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+
+def verificar_api_key(x_api_key: str = Header(default="")) -> None:
+    """Exige el header X-API-Key con la clave de ADMIN_API_KEY."""
+    if not settings.admin_api_key:
+        raise HTTPException(status_code=503, detail="Admin deshabilitado: falta configurar ADMIN_API_KEY")
+    if not secrets.compare_digest(x_api_key, settings.admin_api_key):
+        raise HTTPException(status_code=401, detail="API key inválida o ausente")
+
+
+router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(verificar_api_key)])
 
 
 class EmpresaIn(BaseModel):

@@ -16,4 +16,6 @@ class Mensaje(Base):
     telefono = Column(String(20), nullable=False, index=True)
     direccion = Column(String(10), nullable=False)  # "entrante" (usuario) | "saliente" (bot)
     texto = Column(Text)
+    # id único del mensaje de WhatsApp (solo entrantes); único para deduplicar reintentos.
+    wamid = Column(String(255), unique=True, index=True)
     creado_en = Column(DateTime(timezone=True), default=_ahora)

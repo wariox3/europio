@@ -1,5 +1,7 @@
+import logging
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modelos.conversacion import Conversacion
@@ -9,6 +11,8 @@ from app.modelos.faq import Faq
 from app.modelos.mensaje import Mensaje
 from app.servicios.resolver_empresa import resolver_empresa
 from app.servicios.whatsapp import enviar_mensaje
+
+logger = logging.getLogger(__name__)
 
 MAX_OPCIONES = 9  # mantiene el menú corto y los números en un solo dígito
 INACTIVIDAD = timedelta(hours=12)  # tras este tiempo, el siguiente mensaje reinicia
@@ -30,8 +34,8 @@ def _esta_inactiva(conv: Conversacion) -> bool:
 
 # --- historial de mensajes ----------------------------------------------------
 
-def registrar_mensaje(db: Session, telefono: str, direccion: str, texto: str) -> None:
-    db.add(Mensaje(telefono=telefono, direccion=direccion, texto=texto))
+def registrar_mensaje(db: Session, telefono: str, direccion: str, texto: str, wamid: str | None = None) -> None:
+    db.add(Mensaje(telefono=telefono, direccion=direccion, texto=texto, wamid=wamid or None))
     db.commit()
 
 
@@ -168,9 +172,16 @@ async def _ir_a_menu(conv: Conversacion, telefono: str, db: Session, empresa_id:
 
 # --- máquina de estados -------------------------------------------------------
 
-async def procesar_mensaje(telefono: str, texto: str, db: Session) -> None:
+async def procesar_mensaje(telefono: str, texto: str, db: Session, wamid: str | None = None) -> None:
     conv = obtener_o_crear_conversacion(db, telefono)
-    registrar_mensaje(db, telefono, "entrante", texto)
+
+    # Registra el entrante. Si el wamid ya existe (reintento de WhatsApp), se descarta.
+    try:
+        registrar_mensaje(db, telefono, "entrante", texto, wamid)
+    except IntegrityError:
+        db.rollback()
+        logger.info("Mensaje duplicado (wamid=%s) descartado.", wamid)
+        return
 
     # Reinicia si la conversación ya terminó o quedó inactiva mucho tiempo.
     if conv.estado == "finalizada" or _esta_inactiva(conv):
