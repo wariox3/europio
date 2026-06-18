@@ -7,8 +7,8 @@ Uso:
     python scripts/chat_local.py          # chat interactivo con los datos actuales
     python scripts/chat_local.py seed     # primero carga datos de ejemplo, luego chatea
 
-En el menú, "toca" una opción escribiendo su id entre corchetes, p. ej. `faq:1`
-o `empresa:2`. Escribe `salir` para terminar.
+El bot usa menús numerados: responde con el número de la opción (1, 2, 3...),
+igual que lo hará el guarda en WhatsApp. Escribe `salir` para terminar.
 """
 
 import asyncio

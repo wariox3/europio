@@ -1,11 +1,44 @@
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy.orm import Session
 
 from app.modelos.conversacion import Conversacion
 from app.modelos.empresa import Empresa
 from app.modelos.escalamiento import Escalamiento
 from app.modelos.faq import Faq
+from app.modelos.mensaje import Mensaje
 from app.servicios.resolver_empresa import resolver_empresa
-from app.servicios.whatsapp import enviar_lista, enviar_mensaje
+from app.servicios.whatsapp import enviar_mensaje
+
+MAX_OPCIONES = 9  # mantiene el menú corto y los números en un solo dígito
+INACTIVIDAD = timedelta(hours=12)  # tras este tiempo, el siguiente mensaje reinicia
+RESPUESTAS_NO = {"2", "no", "no gracias", "no, gracias", "salir", "nada", "ninguna"}
+
+
+def _ahora() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _esta_inactiva(conv: Conversacion) -> bool:
+    ult = conv.actualizado_en
+    if ult is None:
+        return False
+    if ult.tzinfo is None:  # SQLite guarda naive; asume UTC
+        ult = ult.replace(tzinfo=timezone.utc)
+    return (_ahora() - ult) > INACTIVIDAD
+
+
+# --- historial de mensajes ----------------------------------------------------
+
+def registrar_mensaje(db: Session, telefono: str, direccion: str, texto: str) -> None:
+    db.add(Mensaje(telefono=telefono, direccion=direccion, texto=texto))
+    db.commit()
+
+
+async def _responder(db: Session, telefono: str, texto: str) -> None:
+    """Registra el mensaje saliente en el historial y lo envía por WhatsApp."""
+    registrar_mensaje(db, telefono, "saliente", texto)
+    await enviar_mensaje(telefono, texto)
 
 
 # --- helpers de persistencia --------------------------------------------------
@@ -39,15 +72,44 @@ def crear_escalamiento(db: Session, telefono: str, empresa_id, motivo: str, text
     db.commit()
 
 
-def buscar_faq_por_opcion(db: Session, texto: str) -> Faq | None:
-    # En el menú, la selección llega como "faq:<id>" (respuesta de lista interactiva).
-    if texto.startswith("faq:"):
-        try:
-            faq_id = int(texto.split(":", 1)[1])
-        except ValueError:
-            return None
-        return db.get(Faq, faq_id)
-    # Texto libre: intenta casar por tema exacto o por pregunta_corta.
+# --- opciones del menú numerado ----------------------------------------------
+
+def _guardar_opciones(conv: Conversacion, ids: list[int]) -> None:
+    conv.opciones = ",".join(str(i) for i in ids) if ids else None
+
+
+def _leer_opciones(conv: Conversacion) -> list[int]:
+    if not conv.opciones:
+        return []
+    return [int(x) for x in conv.opciones.split(",") if x]
+
+
+def _opcion_elegida(texto: str, ids: list[int]) -> int | None:
+    """Si el texto es un número válido del menú, devuelve el id correspondiente."""
+    t = texto.strip()
+    if t.isdigit() and ids:
+        n = int(t)
+        if 1 <= n <= len(ids):
+            return ids[n - 1]
+    return None
+
+
+def aplicar_plantilla(texto: str, empresa: Empresa | None) -> str:
+    """Reemplaza los marcadores de la FAQ con los datos de la empresa.
+
+    Marcadores soportados: {empresa} (nombre) y {celular} (WhatsApp/teléfono).
+    """
+    if empresa is None:
+        return texto
+    return (
+        texto
+        .replace("{empresa}", empresa.nombre or "")
+        .replace("{celular}", empresa.celular or "")
+    )
+
+
+def buscar_faq_por_texto(db: Session, texto: str) -> Faq | None:
+    """Coincidencia por texto libre (tema exacto o parte de la pregunta corta)."""
     t = texto.strip().lower()
     if not t:
         return None
@@ -58,72 +120,141 @@ def buscar_faq_por_opcion(db: Session, texto: str) -> Faq | None:
     )
 
 
-# --- construcción de menús ----------------------------------------------------
+# --- construcción de menús (texto numerado) -----------------------------------
 
-async def enviar_menu_principal(telefono: str, db: Session) -> None:
-    filas = [
-        {"id": f"faq:{faq.id}", "title": (faq.pregunta_corta or faq.tema)[:24]}
-        for faq in db.query(Faq).order_by(Faq.id).all()
-    ]
-    if not filas:
-        await enviar_mensaje(telefono, "Por ahora no hay temas disponibles. Te conecto con el equipo.")
-        return
-    await enviar_lista(telefono, "¿En qué te puedo ayudar?", "Ver temas", filas)
+async def enviar_menu_principal(telefono: str, db: Session) -> list[int]:
+    """Envía el menú de temas como texto numerado. Devuelve los ids en orden."""
+    faqs = db.query(Faq).order_by(Faq.id).all()
+    if not faqs:
+        await _responder(
+            db,
+            telefono,
+            "Por ahora no tengo temas disponibles para mostrarte. 🙌 Le aviso a "
+            "una persona del equipo para que te ayude.",
+        )
+        return []
+    lineas = [f"{i}. {faq.pregunta_corta or faq.tema}" for i, faq in enumerate(faqs, 1)]
+    cuerpo = (
+        "¡Genial! 🙌 ¿Sobre qué tema necesitas ayuda?\n\n"
+        + "\n".join(lineas)
+        + "\n\nResponde con el *número* de la opción."
+    )
+    await _responder(db, telefono, cuerpo)
+    return [faq.id for faq in faqs]
 
 
-async def enviar_lista_empresas(telefono: str, candidatos_ids: list[int], db: Session) -> None:
-    filas = []
-    for empresa_id in candidatos_ids[:10]:  # WhatsApp permite máx. 10 filas por sección
-        empresa = db.get(Empresa, empresa_id)
-        if empresa:
-            filas.append({"id": f"empresa:{empresa.id}", "title": empresa.nombre[:24]})
-    await enviar_lista(telefono, "¿Cuál es tu empresa?", "Ver empresas", filas)
+async def enviar_opciones_empresas(telefono: str, candidatos_ids: list[int], db: Session) -> list[int]:
+    """Envía las empresas candidatas como texto numerado. Devuelve los ids en orden."""
+    empresas = [e for e in (db.get(Empresa, eid) for eid in candidatos_ids[:MAX_OPCIONES]) if e]
+    lineas = [f"{i}. {e.nombre}" for i, e in enumerate(empresas, 1)]
+    cuerpo = (
+        "Encontré varias empresas parecidas. ¿Cuál es la tuya?\n\n"
+        + "\n".join(lineas)
+        + "\n\nResponde con el *número*, o escribe el nombre completo."
+    )
+    await _responder(db, telefono, cuerpo)
+    return [e.id for e in empresas]
+
+
+# --- transiciones reutilizables -----------------------------------------------
+
+async def _ir_a_menu(conv: Conversacion, telefono: str, db: Session, empresa_id: int) -> None:
+    conv.empresa_id = empresa_id
+    conv.estado = "menu_principal"
+    ids = await enviar_menu_principal(telefono, db)
+    _guardar_opciones(conv, ids)
+    db.commit()
 
 
 # --- máquina de estados -------------------------------------------------------
 
 async def procesar_mensaje(telefono: str, texto: str, db: Session) -> None:
     conv = obtener_o_crear_conversacion(db, telefono)
+    registrar_mensaje(db, telefono, "entrante", texto)
+
+    # Reinicia si la conversación ya terminó o quedó inactiva mucho tiempo.
+    if conv.estado == "finalizada" or _esta_inactiva(conv):
+        conv.estado = "inicio"
+        conv.empresa_id = None
+        conv.opciones = None
 
     if conv.estado == "inicio":
-        await enviar_mensaje(telefono, "¡Hola! ¿Cuál es el nombre de tu empresa?")
+        await _responder(
+            db,
+            telefono,
+            "¡Hola! 👋 Te damos la bienvenida al canal de soporte del portal de "
+            "empleados. Para empezar, cuéntame: ¿en qué empresa trabajas?",
+        )
         conv.estado = "esperando_empresa"
         db.commit()
         return
 
     if conv.estado in ("esperando_empresa", "confirmando_empresa"):
-        # Confirmación directa desde la lista interactiva.
-        if texto.startswith("empresa:"):
-            try:
-                conv.empresa_id = int(texto.split(":", 1)[1])
-            except ValueError:
-                conv.empresa_id = None
-            conv.estado = "menu_principal"
-            db.commit()
-            await enviar_menu_principal(telefono, db)
+        # ¿Eligió por número una de las empresas que le ofrecimos?
+        empresa_id = _opcion_elegida(texto, _leer_opciones(conv))
+        if empresa_id is not None:
+            await _ir_a_menu(conv, telefono, db, empresa_id)
             return
 
+        # Si no, intenta resolver por el nombre que escribió.
         empresas = db.query(Empresa).all()
         resultado = resolver_empresa(texto, empresas)
         if resultado["match"]:
-            conv.empresa_id = resultado["match"]
-            conv.estado = "menu_principal"
-            db.commit()
-            await enviar_menu_principal(telefono, db)
+            await _ir_a_menu(conv, telefono, db, resultado["match"])
         elif resultado["candidatos"]:
             conv.estado = "confirmando_empresa"
+            ids = await enviar_opciones_empresas(telefono, resultado["candidatos"], db)
+            _guardar_opciones(conv, ids)
             db.commit()
-            await enviar_lista_empresas(telefono, resultado["candidatos"], db)
         else:
             crear_escalamiento(db, telefono, None, "empresa_no_identificada", texto)
-            await enviar_mensaje(telefono, "No logré identificar tu empresa, ya te vamos a contactar.")
+            await _responder(
+                db,
+                telefono,
+                "Mmm, no logré identificar tu empresa. 😕 No te preocupes: le paso "
+                "tu caso a una persona del equipo para que te contacte pronto.",
+            )
         return
 
     if conv.estado == "menu_principal":
-        faq = buscar_faq_por_opcion(db, texto)
+        # Primero por número del menú; si no, por texto libre.
+        faq = None
+        faq_id = _opcion_elegida(texto, _leer_opciones(conv))
+        if faq_id is not None:
+            faq = db.get(Faq, faq_id)
+        if faq is None:
+            faq = buscar_faq_por_texto(db, texto)
+
         if faq:
-            await enviar_mensaje(telefono, faq.respuesta)
+            empresa = db.get(Empresa, conv.empresa_id) if conv.empresa_id else None
+            await _responder(db, telefono, aplicar_plantilla(faq.respuesta, empresa))
+            conv.estado = "preguntando_mas"
+            db.commit()
+            await _responder(db, telefono, "¿Te puedo ayudar con algo más?\n\n1. Sí\n2. No")
         else:
             crear_escalamiento(db, telefono, conv.empresa_id, "intencion_no_reconocida", texto)
-            await enviar_mensaje(telefono, "No tengo esa respuesta a mano, te conecto con alguien del equipo.")
+            await _responder(
+                db,
+                telefono,
+                "Esa no la tengo a mano. 🤔 Te conecto con una persona del equipo "
+                "para que te ayude; en un momento te contactan.",
+            )
+        return
+
+    if conv.estado == "preguntando_mas":
+        if texto.strip().lower() in RESPUESTAS_NO:
+            conv.estado = "finalizada"
+            conv.cerrada_en = _ahora()
+            conv.opciones = None
+            db.commit()
+            await _responder(
+                db, telefono,
+                "¡Gracias por escribirnos! 👋 Que tengas un buen día.",
+            )
+        else:
+            # Cualquier otra cosa: vuelve a mostrar el menú de temas.
+            conv.estado = "menu_principal"
+            ids = await enviar_menu_principal(telefono, db)
+            _guardar_opciones(conv, ids)
+            db.commit()
         return

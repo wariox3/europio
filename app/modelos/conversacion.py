@@ -16,5 +16,9 @@ class Conversacion(Base):
     telefono = Column(String(20), nullable=False, index=True)
     empresa_id = Column(Integer, nullable=True)
     estado = Column(String(30), default="inicio")
+    # IDs (separados por coma) de las opciones del último menú numerado mostrado,
+    # para mapear la respuesta numérica del usuario a la opción correcta.
+    opciones = Column(String(255), nullable=True)
     creado_en = Column(DateTime(timezone=True), default=_ahora)
     actualizado_en = Column(DateTime(timezone=True), default=_ahora, onupdate=_ahora)
+    cerrada_en = Column(DateTime(timezone=True), nullable=True)  # cuándo se finalizó
