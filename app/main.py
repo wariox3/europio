@@ -12,8 +12,28 @@ from app.routers import admin, panel, webhook
 logger = logging.getLogger(__name__)
 
 
+def _init_sentry() -> None:
+    """Inicializa Sentry si hay DSN configurado. Sin DSN no hace nada."""
+    if not settings.sentry_dsn:
+        logger.info("SENTRY_DSN no configurado; el monitoreo de errores está desactivado.")
+        return
+
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        environment=settings.environment,
+        traces_sample_rate=settings.sentry_traces_sample_rate,
+        # No enviar datos personales (cuerpos de petición, cookies, etc.) por defecto.
+        send_default_pii=False,
+    )
+    logger.info("Sentry inicializado (environment=%s).", settings.environment)
+
+
 def create_app() -> FastAPI:
     # El esquema de la BD se gestiona con Alembic (`alembic upgrade head`).
+    _init_sentry()
+
     app = FastAPI(title=settings.app_name, debug=settings.debug)
 
     secret = settings.session_secret

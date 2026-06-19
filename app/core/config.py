@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     # Panel del equipo (sesión)
     session_secret: str = ""  # clave para firmar las cookies de sesión del panel
 
+    # Sentry (monitoreo de errores). Vacío = desactivado.
+    sentry_dsn: str = ""
+    sentry_traces_sample_rate: float = 0.0  # 0.0 = sin trazas de rendimiento; 1.0 = todas
+
     @property
     def whatsapp_api_url(self) -> str:
         return (
