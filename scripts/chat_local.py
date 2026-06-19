@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import app.servicios.whatsapp as wa  # noqa: E402
 from app.core.db import SessionLocal  # noqa: E402
+from app.datos.faqs_fijas import sembrar_faqs  # noqa: E402
 from app.modelos.conversacion import Conversacion  # noqa: E402
 from app.modelos.empresa import Empresa  # noqa: E402
 from app.modelos.faq import Faq  # noqa: E402
@@ -46,17 +47,10 @@ async def _imprimir_envio(payload: dict) -> None:
 def sembrar_datos(db) -> None:
     if db.query(Empresa).count() == 0:
         db.add(Empresa(nombre="Comercializadora El Sol SAS", alias="el sol, elsol"))
-    if db.query(Faq).count() == 0:
-        db.add_all([
-            Faq(tema="registro", pregunta_corta="Cómo registrarme",
-                respuesta="Entra a portal.example.com y crea tu usuario con tu cédula."),
-            Faq(tema="colilla", pregunta_corta="Descargar colilla",
-                respuesta="En el portal, menú 'Mis documentos' → 'Colilla de pago'."),
-            Faq(tema="contrasena", pregunta_corta="Recuperar contraseña",
-                respuesta="Usa 'Olvidé mi contraseña' en el login; llega un correo."),
-        ])
-    db.commit()
-    print("✓ Datos de ejemplo cargados.\n")
+        db.commit()
+    # Las FAQs son fijas: se sincronizan desde el fixture (fuente de verdad única).
+    sembrar_faqs(db)
+    print("✓ Datos de ejemplo cargados (FAQs sincronizadas desde el fixture).\n")
 
 
 async def main() -> None:
