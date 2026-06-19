@@ -14,6 +14,7 @@ from app.core.db import get_db
 from app.core.seguridad import usuario_actual, verificar_password
 from app.modelos.conversacion import Conversacion
 from app.modelos.empresa import Empresa
+from app.modelos.escalamiento import Escalamiento
 from app.modelos.mensaje import Mensaje
 from app.modelos.usuario import Usuario
 from app.servicios.flujo import registrar_mensaje
@@ -29,10 +30,16 @@ router = APIRouter(prefix="/panel", tags=["panel"])
 
 # --- helpers ------------------------------------------------------------------
 
-def _lista_conversaciones(db: Session) -> list[dict]:
-    """Conversaciones para el panel izquierdo, ordenadas por último mensaje."""
+def _lista_conversaciones(db: Session, filtro: str | None = None) -> list[dict]:
+    """Conversaciones para el panel izquierdo, ordenadas por último mensaje.
+
+    filtro="espera" -> solo las que esperan atención de un asesor (con_asesor).
+    """
+    consulta = db.query(Conversacion)
+    if filtro == "espera":
+        consulta = consulta.filter(Conversacion.estado == "con_asesor")
     items = []
-    for c in db.query(Conversacion).all():
+    for c in consulta.all():
         ultimo = (
             db.query(Mensaje)
             .filter(Mensaje.telefono == c.telefono)
@@ -148,10 +155,17 @@ def logout(request: Request):
 def chats(
     request: Request,
     chat: str | None = None,
+    filtro: str | None = None,
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(usuario_actual),
 ):
-    ctx = {"request": request, "usuario": usuario, "items": _lista_conversaciones(db), "chat": False}
+    ctx = {
+        "request": request,
+        "usuario": usuario,
+        "items": _lista_conversaciones(db, filtro),
+        "filtro": filtro,
+        "chat": False,
+    }
     if chat:
         ctx.update(_contexto_chat(request, db, chat))
         ctx["chat"] = True
@@ -161,11 +175,12 @@ def chats(
 @router.get("/lista", response_class=HTMLResponse)
 def fragmento_lista(
     request: Request,
+    filtro: str | None = None,
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(usuario_actual),
 ):
     return templates.TemplateResponse(
-        "_lista.html", {"request": request, "items": _lista_conversaciones(db)}
+        "_lista.html", {"request": request, "items": _lista_conversaciones(db, filtro)}
     )
 
 
@@ -216,6 +231,22 @@ async def responder(
     return RedirectResponse(destino, status_code=303)
 
 
+@router.post("/conversaciones/{telefono}/eliminar")
+def eliminar(
+    telefono: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(usuario_actual),
+):
+    db.query(Mensaje).filter(Mensaje.telefono == telefono).delete()
+    db.query(Escalamiento).filter(Escalamiento.telefono == telefono).delete()
+    db.query(Conversacion).filter(Conversacion.telefono == telefono).delete()
+    db.commit()
+    if request.headers.get("HX-Request"):
+        return Response(status_code=204, headers={"HX-Redirect": "/panel"})
+    return RedirectResponse("/panel", status_code=303)
+
+
 @router.post("/conversaciones/{telefono}/cerrar")
 def cerrar(
     telefono: str,
@@ -223,8 +254,6 @@ def cerrar(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(usuario_actual),
 ):
-    from app.modelos.escalamiento import Escalamiento
-
     conv = db.query(Conversacion).filter(Conversacion.telefono == telefono).first()
     if conv is not None:
         conv.estado = "finalizada"

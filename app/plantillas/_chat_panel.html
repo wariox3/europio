@@ -30,3 +30,13 @@
   <small>Solo lectura (estado: {{ conv.estado if conv else "—" }}).</small>
 </div>
 {% endif %}
+{% if conv %}
+<form hx-post="/panel/conversaciones/{{ telefono }}/eliminar" hx-target="#chat-panel"
+      hx-confirm="¿Eliminar esta conversación y TODOS sus mensajes? Esta acción no se puede deshacer."
+      style="padding:0 .5rem .6rem;">
+  <button type="submit" class="outline"
+          style="margin:0;color:var(--pico-color-red-500);border-color:var(--pico-color-red-500);">
+    Eliminar conversación
+  </button>
+</form>
+{% endif %}

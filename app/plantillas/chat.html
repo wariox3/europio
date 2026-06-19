@@ -32,10 +32,18 @@
 </style>
 {% endblock %}
 {% block content %}
-<h2 style="margin-bottom:.5rem;">Chats</h2>
+<div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem;">
+  <h2 style="margin:0;">Chats</h2>
+  <a href="/panel{% if telefono %}?chat={{ telefono }}{% endif %}" role="button"
+     class="{{ 'outline secondary' if filtro == 'espera' else '' }}"
+     style="padding:.15rem .7rem;font-size:.8rem;margin:0;">Todos</a>
+  <a href="/panel?filtro=espera{% if telefono %}&chat={{ telefono }}{% endif %}" role="button"
+     class="{{ '' if filtro == 'espera' else 'outline secondary' }}"
+     style="padding:.15rem .7rem;font-size:.8rem;margin:0;">En espera</a>
+</div>
 <div class="wa">
   <aside class="wa-lista" id="wa-lista"
-         hx-get="/panel/lista" hx-trigger="every 10s" hx-target="#wa-lista" hx-swap="innerHTML">
+         hx-get="/panel/lista{% if filtro %}?filtro={{ filtro }}{% endif %}" hx-trigger="every 10s" hx-target="#wa-lista" hx-swap="innerHTML">
     {% include "_lista.html" %}
   </aside>
   <section class="wa-chat" id="chat-panel">
