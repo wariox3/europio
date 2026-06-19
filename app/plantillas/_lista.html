@@ -1,0 +1,10 @@
+{% for it in items %}
+<a class="wa-item" href="/panel?chat={{ it.telefono }}"
+   hx-get="/panel/chat/{{ it.telefono }}" hx-target="#chat-panel" hx-push-url="/panel?chat={{ it.telefono }}">
+  {% if it.no_leidos %}<span class="badge">{{ it.no_leidos }}</span>{% endif %}
+  <div class="tit">{{ it.empresa or it.telefono }}{% if it.con_asesor %}<span class="dot" title="Esperando asesor"></span>{% endif %}</div>
+  <div class="prev">{{ it.telefono }} · {{ it.ultimo[:40] }}</div>
+</a>
+{% else %}
+<p style="padding:1rem;"><small>Sin conversaciones.</small></p>
+{% endfor %}

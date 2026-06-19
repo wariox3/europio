@@ -1,0 +1,32 @@
+<div style="padding:.6rem .8rem;border-bottom:1px solid var(--pico-muted-border-color);">
+  <strong>{{ empresa or telefono }}</strong> · <small>{{ telefono }}</small>
+  · <kbd>{{ conv.estado if conv else "—" }}</kbd>
+</div>
+
+{% if error == "envio" %}
+<p style="color:var(--pico-color-red-500);padding:.4rem .8rem;margin:0;">
+  No se pudo enviar (¿ventana de 24 h cerrada o token?). Revisa el log.
+</p>
+{% endif %}
+
+<div class="wa-msgs" id="wa-msgs"
+     hx-get="/panel/mensajes/{{ telefono }}" hx-trigger="every 5s" hx-target="this" hx-swap="innerHTML">
+  {% include "_mensajes.html" %}
+</div>
+
+{% if conv and conv.estado == "con_asesor" %}
+<form style="padding:.5rem;border-top:1px solid var(--pico-muted-border-color);display:flex;gap:.5rem;"
+      hx-post="/panel/conversaciones/{{ telefono }}/responder" hx-target="#chat-panel">
+  <input type="text" name="texto" placeholder="Escribe un mensaje..." required style="flex:1;margin:0;">
+  <button type="submit" style="margin:0;width:auto;">Enviar</button>
+</form>
+<form hx-post="/panel/conversaciones/{{ telefono }}/cerrar" hx-target="#chat-panel"
+      hx-confirm="¿Cerrar esta conversación? El cliente volverá al bot si escribe de nuevo."
+      style="padding:0 .5rem .5rem;">
+  <button type="submit" class="secondary outline" style="margin:0;">Cerrar conversación</button>
+</form>
+{% else %}
+<div style="padding:.5rem .8rem;border-top:1px solid var(--pico-muted-border-color);">
+  <small>Solo lectura (estado: {{ conv.estado if conv else "—" }}).</small>
+</div>
+{% endif %}

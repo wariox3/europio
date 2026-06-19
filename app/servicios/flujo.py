@@ -194,6 +194,7 @@ async def _escalar_empresa(conv: Conversacion, telefono: str, db: Session, texto
     conv.estado = "con_asesor"
     conv.intentos = 0
     conv.opciones = None
+    conv.no_leidos = 0
     db.commit()
     await _responder(
         db,
@@ -228,8 +229,12 @@ async def procesar_mensaje(telefono: str, texto: str | None, db: Session, wamid:
             conv.empresa_id = None
             conv.opciones = None
             conv.intentos = 0
+            conv.no_leidos = 0
         else:
-            return  # mudo: el mensaje queda registrado para el asesor
+            # mudo: el mensaje queda registrado para el asesor y suma a no leídos.
+            conv.no_leidos = (conv.no_leidos or 0) + 1
+            db.commit()
+            return
 
     # Si no es texto, pide texto y no altera el estado de la conversación.
     if es_no_texto:
@@ -318,6 +323,7 @@ async def procesar_mensaje(telefono: str, texto: str | None, db: Session, wamid:
             crear_escalamiento(db, telefono, conv.empresa_id, "solicita_asesor", texto)
             conv.estado = "con_asesor"
             conv.opciones = None
+            conv.no_leidos = 0
             db.commit()
             await _responder(
                 db,
