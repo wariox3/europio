@@ -5,9 +5,9 @@
     </div>
   {% endif %}
   {% if m.direccion == "entrante" %}
-    <div style="text-align:left;margin:.25rem 0;"><span class="b b-in"><span class="txt">{{ m.texto }}</span><span class="hora">{{ m.hora }}</span></span></div>
+    <div style="text-align:left;margin:.25rem 0;"><span class="b b-in">{% if m.imagen_url %}<a href="{{ m.imagen_url }}" target="_blank" rel="noopener"><img src="{{ m.imagen_url }}" alt="imagen" style="max-width:240px;border-radius:.4rem;display:block;"></a>{% endif %}{% if m.texto %}<span class="txt">{{ m.texto }}</span>{% endif %}<span class="hora">{{ m.hora }}</span></span></div>
   {% else %}
-    <div style="text-align:right;margin:.25rem 0;"><span class="b b-out"><span class="autor">{{ m.autor }}</span><span class="txt">{{ m.texto }}</span><span class="hora">{{ m.hora }}</span></span></div>
+    <div style="text-align:right;margin:.25rem 0;"><span class="b b-out"><span class="autor">{{ m.autor }}</span>{% if m.imagen_url %}<a href="{{ m.imagen_url }}" target="_blank" rel="noopener"><img src="{{ m.imagen_url }}" alt="imagen" style="max-width:240px;border-radius:.4rem;display:block;"></a>{% endif %}{% if m.texto %}<span class="txt">{{ m.texto }}</span>{% endif %}<span class="hora">{{ m.hora }}</span></span></div>
   {% endif %}
 {% else %}
   <p><small>Sin mensajes.</small></p>

@@ -18,7 +18,7 @@ from app.modelos.escalamiento import Escalamiento
 from app.modelos.mensaje import Mensaje
 from app.modelos.usuario import Usuario
 from app.servicios.flujo import registrar_mensaje
-from app.servicios.whatsapp import enviar_mensaje
+from app.servicios.whatsapp import enviar_imagen, enviar_mensaje
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,11 @@ def _lista_conversaciones(db: Session, filtro: str | None = None) -> list[dict]:
         items.append({
             "telefono": c.telefono,
             "empresa": empresa.nombre if empresa else None,
-            "ultimo": (ultimo.texto if ultimo and ultimo.texto else ""),
+            "ultimo": (
+                ultimo.texto if ultimo and ultimo.texto
+                else "📷 Imagen" if ultimo and ultimo.imagen_url
+                else ""
+            ),
             "orden": ultimo.id if ultimo else 0,
             "con_asesor": c.estado == "con_asesor",
             "no_leidos": c.no_leidos or 0,
@@ -88,6 +92,7 @@ def _mensajes_render(db: Session, telefono: str) -> list[dict]:
         mensajes.append({
             "direccion": m.direccion,
             "texto": m.texto,
+            "imagen_url": m.imagen_url,
             "autor": (nombres.get(m.usuario_id) or "Asesor") if m.usuario_id else "Bot",
             "hora": local.strftime("%H:%M") if local else "",
             "sep": _etiqueta_fecha(fecha) if (fecha and fecha != fecha_prev) else None,
@@ -224,6 +229,34 @@ async def responder(
             registrar_mensaje(db, telefono, "saliente", texto, usuario_id=usuario.id)
         except Exception:
             logger.exception("Error enviando respuesta del asesor a %s", telefono)
+            error = "envio"
+    if request.headers.get("HX-Request"):
+        return templates.TemplateResponse("_chat_panel.html", _contexto_chat(request, db, telefono, error))
+    destino = f"/panel?chat={telefono}" + ("&error=envio" if error else "")
+    return RedirectResponse(destino, status_code=303)
+
+
+@router.post("/conversaciones/{telefono}/responder_imagen")
+async def responder_imagen(
+    telefono: str,
+    request: Request,
+    imagen_url: str = Form(...),
+    caption: str = Form(""),
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(usuario_actual),
+):
+    error = None
+    imagen_url = imagen_url.strip()
+    caption = caption.strip()
+    if imagen_url:
+        try:
+            await enviar_imagen(telefono, imagen_url, caption or None)
+            registrar_mensaje(
+                db, telefono, "saliente", caption or None,
+                usuario_id=usuario.id, imagen_url=imagen_url,
+            )
+        except Exception:
+            logger.exception("Error enviando imagen del asesor a %s", telefono)
             error = "envio"
     if request.headers.get("HX-Request"):
         return templates.TemplateResponse("_chat_panel.html", _contexto_chat(request, db, telefono, error))

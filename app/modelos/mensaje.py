@@ -16,6 +16,8 @@ class Mensaje(Base):
     telefono = Column(String(20), nullable=False, index=True)
     direccion = Column(String(10), nullable=False)  # "entrante" (usuario) | "saliente" (bot/asesor)
     texto = Column(Text)
+    # URL de una imagen adjunta (p. ej. enviada por el asesor). NULL = mensaje solo de texto.
+    imagen_url = Column(Text, nullable=True)
     # Quién envió un saliente: NULL = bot; con valor = ese asesor (FK a usuarios).
     usuario_id = Column(Integer, nullable=True)
     # id único del mensaje de WhatsApp (solo entrantes); único para deduplicar reintentos.

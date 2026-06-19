@@ -43,6 +43,17 @@ CREATE DATABASE europio OWNER europio;
 SQL
 ```
 
+> **PostgreSQL 15+**: el esquema `public` ya no permite crear tablas a cualquier usuario.
+> Como `europio` no es dueño de ese esquema, Alembic fallaría con
+> `permission denied for schema public`. Dale la propiedad del esquema:
+>
+> ```bash
+> sudo -u postgres psql -d europio <<'SQL'
+> GRANT ALL ON SCHEMA public TO europio;
+> ALTER SCHEMA public OWNER TO europio;
+> SQL
+> ```
+
 ## 3. Código de la app
 
 ```bash
@@ -94,6 +105,19 @@ sudo -u europio bash -c 'cd /opt/europio && .venv/bin/alembic upgrade head'
 
 > Tras cada actualización de código que cambie modelos, vuelve a correr este comando
 > (las nuevas revisiones de `alembic/versions/` se aplican con `alembic upgrade head`).
+
+### 5.1 Cargar las FAQs (datos fijos)
+
+Las FAQs del bot son fijas y viven en `app/datos/faqs_fijas.py`. La migración crea la
+tabla vacía, así que hay que sembrarlas (si no, el menú sale sin temas):
+
+```bash
+sudo -u europio bash -c 'cd /opt/europio && .venv/bin/python scripts/cargar_faqs.py'
+```
+
+> Es idempotente: deja la tabla `faqs` exactamente igual al fixture (crea las que
+> falten, actualiza las que cambien y elimina las que ya no estén). Vuelve a correrlo
+> cada vez que edites `faqs_fijas.py`.
 
 ## 6. Servicio systemd (uvicorn)
 
@@ -162,6 +186,7 @@ El token de 24 h caduca. Para uno que no expire:
 cd /opt/europio
 sudo -u europio git pull
 sudo -u europio .venv/bin/pip install -r requirements.txt
-sudo -u europio .venv/bin/alembic upgrade head   # aplica migraciones nuevas
+sudo -u europio .venv/bin/alembic upgrade head        # aplica migraciones nuevas
+sudo -u europio .venv/bin/python scripts/cargar_faqs.py  # sincroniza las FAQs fijas
 sudo systemctl restart europio
 ```

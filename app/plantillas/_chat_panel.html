@@ -20,23 +20,42 @@
   <input type="text" name="texto" placeholder="Escribe un mensaje..." required style="flex:1;margin:0;">
   <button type="submit" style="margin:0;width:auto;">Enviar</button>
 </form>
-<form hx-post="/panel/conversaciones/{{ telefono }}/cerrar" hx-target="#chat-panel"
-      hx-confirm="¿Cerrar esta conversación? El cliente volverá al bot si escribe de nuevo."
-      style="padding:0 .5rem .5rem;">
-  <button type="submit" class="secondary outline" style="margin:0;">Cerrar conversación</button>
-</form>
 {% else %}
 <div style="padding:.5rem .8rem;border-top:1px solid var(--pico-muted-border-color);">
   <small>Solo lectura (estado: {{ conv.estado if conv else "—" }}).</small>
 </div>
 {% endif %}
+
 {% if conv %}
-<form hx-post="/panel/conversaciones/{{ telefono }}/eliminar" hx-target="#chat-panel"
-      hx-confirm="¿Eliminar esta conversación y TODOS sus mensajes? Esta acción no se puede deshacer."
-      style="padding:0 .5rem .6rem;">
-  <button type="submit" class="outline"
-          style="margin:0;color:var(--pico-color-red-500);border-color:var(--pico-color-red-500);">
-    Eliminar conversación
-  </button>
-</form>
+<div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:flex-start;padding:.4rem .5rem .6rem;">
+  {% if conv.estado == "con_asesor" %}
+  <details>
+    <summary role="button" class="secondary outline"
+             style="margin:0;width:auto;display:inline-block;padding:.3rem .6rem;font-size:.8rem;">
+      ➕ Adjuntar
+    </summary>
+    <form style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem;"
+          hx-post="/panel/conversaciones/{{ telefono }}/responder_imagen" hx-target="#chat-panel">
+      <input type="url" name="imagen_url" placeholder="URL de la imagen (https://...)" required
+             style="flex:1;min-width:12rem;margin:0;">
+      <input type="text" name="caption" placeholder="Texto opcional" style="flex:1;min-width:8rem;margin:0;">
+      <button type="submit" class="secondary" style="margin:0;width:auto;">Enviar imagen</button>
+    </form>
+  </details>
+  <form hx-post="/panel/conversaciones/{{ telefono }}/cerrar" hx-target="#chat-panel"
+        hx-confirm="¿Cerrar esta conversación? El cliente volverá al bot si escribe de nuevo."
+        style="margin:0;">
+    <button type="submit" class="secondary outline"
+            style="margin:0;width:auto;padding:.3rem .6rem;font-size:.8rem;">Cerrar</button>
+  </form>
+  {% endif %}
+  <form hx-post="/panel/conversaciones/{{ telefono }}/eliminar" hx-target="#chat-panel"
+        hx-confirm="¿Eliminar esta conversación y TODOS sus mensajes? Esta acción no se puede deshacer."
+        style="margin:0;">
+    <button type="submit" class="outline"
+            style="margin:0;width:auto;padding:.3rem .6rem;font-size:.8rem;color:var(--pico-color-red-500);border-color:var(--pico-color-red-500);">
+      Eliminar
+    </button>
+  </form>
+</div>
 {% endif %}

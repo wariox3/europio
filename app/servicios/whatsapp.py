@@ -30,6 +30,22 @@ async def enviar_mensaje(telefono: str, texto: str) -> None:
     })
 
 
+async def enviar_imagen(telefono: str, url: str, caption: str | None = None) -> None:
+    """Envía una imagen por su URL pública (HTTPS, JPEG/PNG, máx. 5 MB).
+
+    El `caption` es texto opcional bajo la imagen (límite de WhatsApp: ~1024 chars).
+    """
+    imagen: dict[str, str] = {"link": url}
+    if caption:
+        imagen["caption"] = caption
+    await _post({
+        "messaging_product": "whatsapp",
+        "to": telefono,
+        "type": "image",
+        "image": imagen,
+    })
+
+
 async def enviar_lista(telefono: str, cuerpo: str, boton: str, filas: list[dict]) -> None:
     """Envía un mensaje interactivo tipo lista.
 

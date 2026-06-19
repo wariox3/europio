@@ -40,9 +40,10 @@ def registrar_mensaje(
     db: Session,
     telefono: str,
     direccion: str,
-    texto: str,
+    texto: str | None,
     wamid: str | None = None,
     usuario_id: int | None = None,
+    imagen_url: str | None = None,
 ) -> None:
     db.add(Mensaje(
         telefono=telefono,
@@ -50,6 +51,7 @@ def registrar_mensaje(
         texto=texto,
         wamid=wamid or None,
         usuario_id=usuario_id,
+        imagen_url=imagen_url,
     ))
     db.commit()
 
