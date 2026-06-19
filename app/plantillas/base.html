@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Soporte europio{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+<body>
+  <main class="container">
+    {% if usuario %}
+    <nav>
+      <ul><li><strong>Soporte europio</strong></li></ul>
+      <ul>
+        <li><a href="/panel">Bandeja</a></li>
+        <li><small>{{ usuario.nombre }}</small></li>
+        <li><a href="/panel/logout" role="button" class="secondary outline">Salir</a></li>
+      </ul>
+    </nav>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

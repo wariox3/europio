@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Bandeja · Soporte europio{% endblock %}
+{% block content %}
+<h2>Bandeja de escalamientos</h2>
+{% if not items %}
+  <p>No hay conversaciones esperando un asesor. 🎉</p>
+{% else %}
+<table>
+  <thead>
+    <tr><th>Teléfono</th><th>Empresa</th><th>Motivo</th><th>Desde</th><th></th></tr>
+  </thead>
+  <tbody>
+  {% for it in items %}
+    <tr>
+      <td>{{ it.conv.telefono }}</td>
+      <td>{{ it.empresa or "—" }}</td>
+      <td>{{ it.motivo or "—" }}</td>
+      <td><small>{{ it.conv.actualizado_en.strftime("%Y-%m-%d %H:%M") if it.conv.actualizado_en else "—" }}</small></td>
+      <td><a href="/panel/conversaciones/{{ it.conv.telefono }}" role="button">Abrir</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 MAX_OPCIONES = 9  # mantiene el menú corto y los números en un solo dígito
 INACTIVIDAD = timedelta(hours=1)  # tras este tiempo, el siguiente mensaje reinicia
+AUTO_CIERRE_ASESOR = timedelta(hours=24)  # auto-cierre de seguridad si nadie atiende
 MAX_INTENTOS_EMPRESA = 3  # intentos de identificar empresa antes de escalar
 RESPUESTAS_NO = {"2", "no", "no gracias", "no, gracias", "salir", "nada", "ninguna"}
 
@@ -24,19 +25,32 @@ def _ahora() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _esta_inactiva(conv: Conversacion) -> bool:
+def _inactiva(conv: Conversacion, limite: timedelta) -> bool:
     ult = conv.actualizado_en
     if ult is None:
         return False
     if ult.tzinfo is None:  # SQLite guarda naive; asume UTC
         ult = ult.replace(tzinfo=timezone.utc)
-    return (_ahora() - ult) > INACTIVIDAD
+    return (_ahora() - ult) > limite
 
 
 # --- historial de mensajes ----------------------------------------------------
 
-def registrar_mensaje(db: Session, telefono: str, direccion: str, texto: str, wamid: str | None = None) -> None:
-    db.add(Mensaje(telefono=telefono, direccion=direccion, texto=texto, wamid=wamid or None))
+def registrar_mensaje(
+    db: Session,
+    telefono: str,
+    direccion: str,
+    texto: str,
+    wamid: str | None = None,
+    usuario_id: int | None = None,
+) -> None:
+    db.add(Mensaje(
+        telefono=telefono,
+        direccion=direccion,
+        texto=texto,
+        wamid=wamid or None,
+        usuario_id=usuario_id,
+    ))
     db.commit()
 
 
@@ -175,10 +189,9 @@ async def _ir_a_menu(conv: Conversacion, telefono: str, db: Session, empresa_id:
 
 
 async def _escalar_empresa(conv: Conversacion, telefono: str, db: Session, texto: str) -> None:
-    """No se pudo identificar la empresa tras varios intentos: escala y finaliza."""
+    """No se pudo identificar la empresa tras varios intentos: pasa a un asesor."""
     crear_escalamiento(db, telefono, None, "empresa_no_identificada", texto)
-    conv.estado = "finalizada"
-    conv.cerrada_en = _ahora()
+    conv.estado = "con_asesor"
     conv.intentos = 0
     conv.opciones = None
     db.commit()
@@ -207,6 +220,17 @@ async def procesar_mensaje(telefono: str, texto: str | None, db: Session, wamid:
         logger.info("Mensaje duplicado (wamid=%s) descartado.", wamid)
         return
 
+    # Conversación con un asesor: el bot está MUDO (lo atiende un humano).
+    # Solo se libera por auto-cierre de seguridad si nadie respondió en mucho tiempo.
+    if conv.estado == "con_asesor":
+        if _inactiva(conv, AUTO_CIERRE_ASESOR):
+            conv.estado = "inicio"
+            conv.empresa_id = None
+            conv.opciones = None
+            conv.intentos = 0
+        else:
+            return  # mudo: el mensaje queda registrado para el asesor
+
     # Si no es texto, pide texto y no altera el estado de la conversación.
     if es_no_texto:
         await _responder(
@@ -218,7 +242,7 @@ async def procesar_mensaje(telefono: str, texto: str | None, db: Session, wamid:
         return
 
     # Reinicia si la conversación ya terminó o quedó inactiva mucho tiempo.
-    if conv.estado == "finalizada" or _esta_inactiva(conv):
+    if conv.estado == "finalizada" or _inactiva(conv, INACTIVIDAD):
         conv.estado = "inicio"
         conv.empresa_id = None
         conv.opciones = None
@@ -292,8 +316,7 @@ async def procesar_mensaje(telefono: str, texto: str | None, db: Session, wamid:
         # Opción 0: hablar con un asesor humano.
         if texto.strip() == "0":
             crear_escalamiento(db, telefono, conv.empresa_id, "solicita_asesor", texto)
-            conv.estado = "finalizada"
-            conv.cerrada_en = _ahora()
+            conv.estado = "con_asesor"
             conv.opciones = None
             db.commit()
             await _responder(

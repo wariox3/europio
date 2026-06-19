@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ telefono }} · Soporte europio{% endblock %}
+{% block content %}
+<p><a href="/panel">← Bandeja</a></p>
+<hgroup>
+  <h2>Conversación · {{ telefono }}</h2>
+  <p>Empresa: <strong>{{ empresa or "—" }}</strong> · Estado: <kbd>{{ conv.estado if conv else "—" }}</kbd></p>
+</hgroup>
+
+{% if request.query_params.get("error") == "envio" %}
+<p style="color:var(--pico-color-red-500)">
+  No se pudo enviar el mensaje (puede ser la ventana de 24 h cerrada o un problema con el token). Revisa el log.
+</p>
+{% endif %}
+
+<div style="border:1px solid var(--pico-muted-border-color);padding:1rem;border-radius:.5rem;max-height:55vh;overflow:auto;margin-bottom:1rem;">
+  {% for m in mensajes %}
+    {% if m.direccion == "entrante" %}
+      <p style="margin:.25rem 0;"><strong>Cliente:</strong> {{ m.texto }}</p>
+    {% else %}
+      <p style="margin:.25rem 0;text-align:right;color:var(--pico-primary);">
+        <strong>{{ nombres.get(m.usuario_id, "Bot") if m.usuario_id else "Bot" }}:</strong> {{ m.texto }}
+      </p>
+    {% endif %}
+  {% else %}
+    <p><small>Sin mensajes.</small></p>
+  {% endfor %}
+</div>
+
+{% if conv and conv.estado == "con_asesor" %}
+<form method="post" action="/panel/conversaciones/{{ telefono }}/responder">
+  <textarea name="texto" rows="2" placeholder="Escribe tu respuesta al cliente..." required></textarea>
+  <div class="grid">
+    <button type="submit">Enviar respuesta</button>
+  </div>
+</form>
+<form method="post" action="/panel/conversaciones/{{ telefono }}/cerrar"
+      onsubmit="return confirm('¿Cerrar esta conversación? El cliente volverá al bot si escribe de nuevo.');">
+  <button type="submit" class="secondary outline">Cerrar conversación</button>
+</form>
+{% else %}
+<p><small>Esta conversación no está asignada a un asesor (estado: {{ conv.estado if conv else "—" }}).</small></p>
+{% endif %}
+{% endblock %}

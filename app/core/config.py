@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # Seguridad del panel admin
     admin_api_key: str = ""  # clave requerida en el header X-API-Key para /admin
 
+    # Panel del equipo (sesión)
+    session_secret: str = ""  # clave para firmar las cookies de sesión del panel
+
     @property
     def whatsapp_api_url(self) -> str:
         return (
