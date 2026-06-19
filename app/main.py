@@ -2,7 +2,7 @@ import logging
 import secrets
 
 from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.core.config import settings
@@ -58,6 +58,61 @@ def create_app() -> FastAPI:
     app.include_router(webhook.router)
     app.include_router(admin.router)
     app.include_router(panel.router)
+
+    @app.get("/", response_class=HTMLResponse, tags=["inicio"])
+    async def inicio() -> str:
+        return f"""<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{settings.app_name}</title>
+  <style>
+    body {{
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+    }}
+    .tarjeta {{
+      text-align: center;
+      padding: 2.5rem 3rem;
+      background: #1e293b;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0,0,0,.35);
+    }}
+    h1 {{ margin: 0 0 .5rem; font-size: 1.6rem; }}
+    p {{ margin: .25rem 0 1.5rem; color: #94a3b8; }}
+    .enlaces a {{
+      display: inline-block;
+      margin: .25rem .4rem;
+      padding: .6rem 1.2rem;
+      border-radius: 8px;
+      text-decoration: none;
+      background: #2563eb;
+      color: #fff;
+      font-weight: 600;
+    }}
+    .enlaces a.secundario {{ background: #334155; }}
+    .estado {{ margin-top: 1.5rem; font-size: .85rem; color: #64748b; }}
+  </style>
+</head>
+<body>
+  <div class="tarjeta">
+    <h1>{settings.app_name}</h1>
+    <p>Bot de atención por WhatsApp</p>
+    <div class="enlaces">
+      <a href="/panel/login">Panel de soporte</a>
+      <a class="secundario" href="/docs">API</a>
+    </div>
+    <div class="estado">Servicio activo · entorno: {settings.environment}</div>
+  </div>
+</body>
+</html>"""
 
     @app.get("/health", tags=["health"])
     async def health() -> dict[str, str]:
