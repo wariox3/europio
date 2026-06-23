@@ -9,7 +9,6 @@ class Empresa(Base):
     id = Column(Integer, primary_key=True)
     nombre = Column(String(150), nullable=False)
     alias = Column(String(500))  # variantes separadas por coma, refuerzan el fuzzy match
-    celular = Column(String(30))  # WhatsApp/teléfono de Gestión Humana de la empresa
     # ¿La empresa tiene un plan de soporte activo con Semántica?
     soporte = Column(Boolean, nullable=False, default=True, server_default=text("true"))
     # Datos de contacto de Gestión Humana, para empresas sin soporte.

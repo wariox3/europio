@@ -5,8 +5,8 @@ de verdad. Para cambiarlas, edita la lista `FAQS_FIJAS` y vuelve a sembrarlas
 con `scripts/cargar_faqs.py` (o `chat_local.py seed`).
 
 Marcadores soportados en `respuesta` (ver `flujo.aplicar_plantilla`):
-  {empresa}          -> nombre de la empresa
-  {empresa_celular}  -> WhatsApp/teléfono de la empresa
+  {empresa}                  -> nombre de la empresa
+  {gestion_humana_celular}   -> WhatsApp de Gestión Humana de la empresa
 
 El orden de la lista es el orden en que aparecen en el menú.
 """
@@ -25,7 +25,7 @@ FAQS_FIJAS: list[dict[str, str]] = [
             "deberás diligenciar tus datos.\n\n"
             "⚠️ Importante: el correo con el que te registres debe ser el mismo que "
             "tienes registrado en Gestión Humana de {empresa}. Si no estás seguro de "
-            "cuál es, puedes verificarlo llamando o escribiendo al WhatsApp {empresa_celular}.\n\n"
+            "cuál es, puedes verificarlo llamando o escribiendo al WhatsApp {gestion_humana_celular}.\n\n"
             "Después de registrarte, llegará un correíto con un link mágico ✨ para "
             "confirmar que el correo es tuyo y no de tu vecino. Dale unos minutitos, "
             "que el cartero digital no es tan rápido como WhatsApp."
@@ -58,7 +58,7 @@ FAQS_FIJAS: list[dict[str, str]] = [
             "⚠️ Importante: El correo con el que te registraste y tu número de "
             "identificación deben coincidir exactamente con los datos que tiene "
             "{empresa} sobre ti. Si no coinciden, no podrás asociarte 🙅‍♂️\n\n"
-            "¿Y si no te deja? Tranquilo, comunícate con {empresa} al 📱 {empresa_celular} para "
+            "¿Y si no te deja? Tranquilo, comunícate con {empresa} al 📱 {gestion_humana_celular} para "
             "verificar tus datos y vuelve a intentarlo 🔄"
         ),
         "imagen_url": "/static/faqs/3-enlazar-empresa.png",

@@ -24,7 +24,6 @@ router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(verifi
 class EmpresaIn(BaseModel):
     nombre: str
     alias: str = ""
-    celular: str = ""
     soporte: bool = True
     gestion_humana_nombre: str = ""
     gestion_humana_celular: str = ""
@@ -33,7 +32,6 @@ class EmpresaIn(BaseModel):
 class EmpresaUpdate(BaseModel):
     nombre: str | None = None
     alias: str | None = None
-    celular: str | None = None
     soporte: bool | None = None
     gestion_humana_nombre: str | None = None
     gestion_humana_celular: str | None = None
@@ -56,7 +54,6 @@ def crear_empresa(datos: EmpresaIn, db: Session = Depends(get_db)) -> dict:
     empresa = Empresa(
         nombre=datos.nombre,
         alias=datos.alias,
-        celular=datos.celular,
         soporte=datos.soporte,
         gestion_humana_nombre=datos.gestion_humana_nombre,
         gestion_humana_celular=datos.gestion_humana_celular,
@@ -71,7 +68,7 @@ def crear_empresa(datos: EmpresaIn, db: Session = Depends(get_db)) -> dict:
 def listar_empresas(db: Session = Depends(get_db)) -> list[dict]:
     return [
         {
-            "id": e.id, "nombre": e.nombre, "alias": e.alias, "celular": e.celular,
+            "id": e.id, "nombre": e.nombre, "alias": e.alias,
             "soporte": e.soporte,
             "gestion_humana_nombre": e.gestion_humana_nombre,
             "gestion_humana_celular": e.gestion_humana_celular,
@@ -89,8 +86,6 @@ def actualizar_empresa(empresa_id: int, datos: EmpresaUpdate, db: Session = Depe
         empresa.nombre = datos.nombre
     if datos.alias is not None:
         empresa.alias = datos.alias
-    if datos.celular is not None:
-        empresa.celular = datos.celular
     if datos.soporte is not None:
         empresa.soporte = datos.soporte
     if datos.gestion_humana_nombre is not None:
@@ -100,7 +95,7 @@ def actualizar_empresa(empresa_id: int, datos: EmpresaUpdate, db: Session = Depe
     db.commit()
     return {
         "id": empresa.id, "nombre": empresa.nombre, "alias": empresa.alias,
-        "celular": empresa.celular, "soporte": empresa.soporte,
+        "soporte": empresa.soporte,
         "gestion_humana_nombre": empresa.gestion_humana_nombre,
         "gestion_humana_celular": empresa.gestion_humana_celular,
     }

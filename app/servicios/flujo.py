@@ -138,14 +138,15 @@ def _opcion_elegida(texto: str, ids: list[int]) -> int | None:
 def aplicar_plantilla(texto: str, empresa: Empresa | None) -> str:
     """Reemplaza los marcadores de la FAQ con los datos de la empresa.
 
-    Marcadores soportados: {empresa} (nombre) y {empresa_celular} (WhatsApp/teléfono).
+    Marcadores soportados: {empresa} (nombre) y {gestion_humana_celular}
+    (WhatsApp de Gestión Humana de la empresa).
     """
     if empresa is None:
         return texto
     return (
         texto
         .replace("{empresa}", empresa.nombre or "")
-        .replace("{empresa_celular}", empresa.celular or "")
+        .replace("{gestion_humana_celular}", empresa.gestion_humana_celular or "")
     )
 
 
