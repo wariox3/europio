@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
@@ -9,10 +10,15 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import get_db
 from app.servicios.flujo import procesar_mensaje
+from app.servicios.whatsapp import descargar_media
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["whatsapp"])
+
+# Carpeta donde se guardan las imágenes entrantes (servidas en /static/media).
+MEDIA_DIR = Path(__file__).resolve().parents[1] / "static" / "media"
+_EXT_POR_MIME = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 
 
 def _firma_valida(cuerpo: bytes, firma: str | None) -> bool:
@@ -40,10 +46,12 @@ async def verificar_webhook(request: Request) -> Response:
     return Response(status_code=403)
 
 
-def _extraer_mensaje(payload: dict) -> tuple[str, str | None, str] | None:
-    """Extrae (telefono, texto, wamid) del payload de WhatsApp.
+def _extraer_mensaje(payload: dict) -> tuple[str, str | None, str, str | None] | None:
+    """Extrae (telefono, texto, wamid, media_id) del payload de WhatsApp.
 
-    `texto` es None cuando el mensaje no es de texto (audio, video, imagen, etc.).
+    `texto` es None cuando el mensaje no trae texto. En imágenes, `texto` es el
+    caption (si lo hay) y `media_id` el id del archivo para descargarlo; en el
+    resto de mensajes no de texto `media_id` es None.
     `wamid` es el id único del mensaje (para deduplicar reintentos).
     Devuelve None para eventos que no son mensajes (p. ej. estados de entrega).
     """
@@ -57,14 +65,33 @@ def _extraer_mensaje(payload: dict) -> tuple[str, str | None, str] | None:
         wamid = msg.get("id", "")
         tipo = msg.get("type")
         if tipo == "text":
-            return telefono, msg["text"]["body"], wamid
+            return telefono, msg["text"]["body"], wamid, None
         if tipo == "interactive":
             inter = msg["interactive"]
             reply = inter.get(inter.get("type"), {})  # list_reply | button_reply
-            return telefono, reply.get("id", ""), wamid
-        return telefono, None, wamid  # audio, video, imagen, ubicación, etc.
+            return telefono, reply.get("id", ""), wamid, None
+        if tipo == "image":
+            img = msg.get("image", {})
+            return telefono, img.get("caption"), wamid, img.get("id")
+        return telefono, None, wamid, None  # audio, video, ubicación, etc.
     except (KeyError, IndexError, TypeError):
         return None
+
+
+async def _guardar_media(media_id: str) -> str | None:
+    """Descarga la imagen entrante y la guarda en /static/media.
+
+    Devuelve la ruta pública (p. ej. /static/media/123.jpg) o None si falla.
+    """
+    descarga = await descargar_media(media_id)
+    if descarga is None:
+        return None
+    contenido, mime = descarga
+    ext = _EXT_POR_MIME.get(mime, "bin")
+    MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+    nombre = f"{media_id}.{ext}"
+    (MEDIA_DIR / nombre).write_bytes(contenido)
+    return f"/static/media/{nombre}"
 
 
 @router.post("/webhook")
@@ -81,9 +108,10 @@ async def recibir_webhook(request: Request, db: Session = Depends(get_db)) -> Re
 
     extraido = _extraer_mensaje(payload)
     if extraido:
-        telefono, texto, wamid = extraido
+        telefono, texto, wamid, media_id = extraido
+        imagen_url = await _guardar_media(media_id) if media_id else None
         try:
-            await procesar_mensaje(telefono, texto, db, wamid=wamid)
+            await procesar_mensaje(telefono, texto, db, wamid=wamid, imagen_url=imagen_url)
         except Exception:
             # No propagamos: si devolvemos error, WhatsApp reintentaría la entrega.
             logger.exception("Error procesando mensaje de %s", telefono)

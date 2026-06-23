@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = True
 
+    # URL pública del servicio (sin barra final), p. ej. https://bot.midominio.com.
+    # Se usa para construir URLs absolutas de archivos estáticos (imágenes de FAQs)
+    # que WhatsApp debe poder descargar por HTTPS.
+    public_base_url: str = ""
+
     # Base de datos
     database_url: str = "postgresql+psycopg://europio:europio@localhost:5432/europio"
 

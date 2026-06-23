@@ -1,8 +1,10 @@
 import logging
 import secrets
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.core.config import settings
@@ -54,6 +56,13 @@ def create_app() -> FastAPI:
     @app.exception_handler(NoAutenticado)
     async def _redirigir_login(request: Request, exc: NoAutenticado) -> RedirectResponse:
         return RedirectResponse("/panel/login", status_code=303)
+
+    # Archivos estáticos públicos (p. ej. imágenes de las FAQs que envía el bot).
+    app.mount(
+        "/static",
+        StaticFiles(directory=str(Path(__file__).parent / "static")),
+        name="static",
+    )
 
     app.include_router(webhook.router)
     app.include_router(admin.router)

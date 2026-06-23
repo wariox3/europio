@@ -58,7 +58,7 @@ def _lista_conversaciones(db: Session, filtro: str | None = None) -> list[dict]:
             "orden": ultimo.id if ultimo else 0,
             "con_asesor": c.estado == "con_asesor",
             "no_leidos": c.no_leidos or 0,
-            "estado": c.estado,
+            "estado": _estado_humano(c.estado),
             "fecha": _fecha_lista(ultimo.creado_en if ultimo else None),
         })
     # Primero las que esperan asesor; dentro de cada grupo, las de actividad más reciente.
@@ -72,6 +72,15 @@ def _a_local(dt: datetime | None) -> datetime | None:
     if dt.tzinfo is None:  # SQLite guarda naive; asume UTC
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(ZONA_LOCAL)
+
+
+def _estado_humano(estado: str) -> str:
+    """Etiqueta legible del estado de la conversación."""
+    if estado == "con_asesor":
+        return "Con asesor"
+    if estado == "finalizada":
+        return "Cerrada"
+    return "Bot"
 
 
 def _fecha_lista(dt) -> str:

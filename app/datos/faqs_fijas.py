@@ -20,7 +20,7 @@ FAQS_FIJAS: list[dict[str, str]] = [
         "tema": "registro",
         "pregunta_corta": "Cómo registrarme",
         "respuesta": (
-            'Ingresa a [www.empleado.co](https://www.empleado.co), busca el botón '
+            'Ingresa a (https://www.empleado.co), busca el botón '
             '"Iniciar sesión" y debajo encontrarás el enlace "Regístrate". Allí '
             "deberás diligenciar tus datos.\n\n"
             "⚠️ Importante: el correo con el que te registres debe ser el mismo que "
@@ -30,6 +30,7 @@ FAQS_FIJAS: list[dict[str, str]] = [
             "confirmar que el correo es tuyo y no de tu vecino. Dale unos minutitos, "
             "que el cartero digital no es tan rápido como WhatsApp."
         ),
+        "imagen_url": "/static/faqs/1-registro.png",
     },
     {
         "tema": "verificar",
@@ -43,6 +44,7 @@ FAQS_FIJAS: list[dict[str, str]] = [
             'sesión" 🔐, entra con tu correo y clave, y si todo sale bien te aparecerá '
             "una opción para reenviar la verificación ✉️🔁."
         ),
+        "imagen_url": "/static/faqs/2-verificacion.png",
     },
     {
         "tema": "asociar_empresa",
@@ -59,6 +61,7 @@ FAQS_FIJAS: list[dict[str, str]] = [
             "¿Y si no te deja? Tranquilo, comunícate con {empresa} al 📱 {empresa_celular} para "
             "verificar tus datos y vuelve a intentarlo 🔄"
         ),
+        "imagen_url": "/static/faqs/3-enlazar-empresa.png",
     },
 ]
 
@@ -81,9 +84,12 @@ def sembrar_faqs(db: Session, *, podar: bool = True) -> dict[str, int]:
         if faq is None:
             db.add(Faq(**item))
             creadas += 1
-        elif (faq.pregunta_corta, faq.respuesta) != (item["pregunta_corta"], item["respuesta"]):
+        elif (faq.pregunta_corta, faq.respuesta, faq.imagen_url) != (
+            item["pregunta_corta"], item["respuesta"], item.get("imagen_url"),
+        ):
             faq.pregunta_corta = item["pregunta_corta"]
             faq.respuesta = item["respuesta"]
+            faq.imagen_url = item.get("imagen_url")
             actualizadas += 1
 
     if podar:

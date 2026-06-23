@@ -28,3 +28,6 @@ htmlcov/
 
 # Logs
 *.log
+
+# Imágenes entrantes de WhatsApp (contenido de usuarios)
+app/static/media/

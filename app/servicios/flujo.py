@@ -9,8 +9,9 @@ from app.modelos.empresa import Empresa
 from app.modelos.escalamiento import Escalamiento
 from app.modelos.faq import Faq
 from app.modelos.mensaje import Mensaje
+from app.core.config import settings
 from app.servicios.resolver_empresa import resolver_empresa
-from app.servicios.whatsapp import enviar_mensaje
+from app.servicios.whatsapp import enviar_imagen, enviar_mensaje
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,23 @@ async def _responder(db: Session, telefono: str, texto: str) -> None:
     """Registra el mensaje saliente en el historial y lo envía por WhatsApp."""
     registrar_mensaje(db, telefono, "saliente", texto)
     await enviar_mensaje(telefono, texto)
+
+
+def _url_publica(ruta: str) -> str:
+    """Convierte una ruta relativa (/static/...) en URL absoluta pública.
+
+    Si ya es absoluta (http...) la devuelve tal cual.
+    """
+    if ruta.startswith(("http://", "https://")):
+        return ruta
+    return f"{settings.public_base_url.rstrip('/')}{ruta}"
+
+
+async def _responder_imagen(db: Session, telefono: str, imagen_url: str) -> None:
+    """Envía una imagen del bot por WhatsApp y la registra en el historial."""
+    url = _url_publica(imagen_url)
+    registrar_mensaje(db, telefono, "saliente", None, imagen_url=imagen_url)
+    await enviar_imagen(telefono, url)
 
 
 # --- helpers de persistencia --------------------------------------------------
@@ -208,16 +226,28 @@ async def _escalar_empresa(conv: Conversacion, telefono: str, db: Session, texto
 
 # --- máquina de estados -------------------------------------------------------
 
-async def procesar_mensaje(telefono: str, texto: str | None, db: Session, wamid: str | None = None) -> None:
+async def procesar_mensaje(
+    telefono: str,
+    texto: str | None,
+    db: Session,
+    wamid: str | None = None,
+    imagen_url: str | None = None,
+) -> None:
     conv = obtener_o_crear_conversacion(db, telefono)
 
-    # texto None => mensaje no de texto (audio, video, imagen, ubicación...).
+    # Sin texto => mensaje no procesable por el bot (audio, video, ubicación...).
+    # Una imagen sin caption entra aquí, pero igual se guarda para mostrarla.
     es_no_texto = texto is None
-    texto_registro = "[mensaje no de texto]" if es_no_texto else texto
+    if texto is not None:
+        texto_registro = texto
+    elif imagen_url is not None:
+        texto_registro = None  # imagen sola: el panel muestra la imagen
+    else:
+        texto_registro = "[mensaje no de texto]"
 
     # Registra el entrante. Si el wamid ya existe (reintento de WhatsApp), se descarta.
     try:
-        registrar_mensaje(db, telefono, "entrante", texto_registro, wamid)
+        registrar_mensaje(db, telefono, "entrante", texto_registro, wamid, imagen_url=imagen_url)
     except IntegrityError:
         db.rollback()
         logger.info("Mensaje duplicado (wamid=%s) descartado.", wamid)
@@ -346,6 +376,8 @@ async def procesar_mensaje(telefono: str, texto: str | None, db: Session, wamid:
         if faq:
             empresa = db.get(Empresa, conv.empresa_id) if conv.empresa_id else None
             await _responder(db, telefono, aplicar_plantilla(faq.respuesta, empresa))
+            if faq.imagen_url:
+                await _responder_imagen(db, telefono, faq.imagen_url)
             conv.estado = "preguntando_mas"
             db.commit()
             await _responder(db, telefono, "¿Te puedo ayudar con algo más?\n\n1. Sí\n2. No")
