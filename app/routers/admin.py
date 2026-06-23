@@ -25,12 +25,18 @@ class EmpresaIn(BaseModel):
     nombre: str
     alias: str = ""
     celular: str = ""
+    soporte: bool = True
+    gestion_humana_nombre: str = ""
+    gestion_humana_celular: str = ""
 
 
 class EmpresaUpdate(BaseModel):
     nombre: str | None = None
     alias: str | None = None
     celular: str | None = None
+    soporte: bool | None = None
+    gestion_humana_nombre: str | None = None
+    gestion_humana_celular: str | None = None
 
 
 class FaqIn(BaseModel):
@@ -47,7 +53,14 @@ class FaqUpdate(BaseModel):
 
 @router.post("/empresas")
 def crear_empresa(datos: EmpresaIn, db: Session = Depends(get_db)) -> dict:
-    empresa = Empresa(nombre=datos.nombre, alias=datos.alias, celular=datos.celular)
+    empresa = Empresa(
+        nombre=datos.nombre,
+        alias=datos.alias,
+        celular=datos.celular,
+        soporte=datos.soporte,
+        gestion_humana_nombre=datos.gestion_humana_nombre,
+        gestion_humana_celular=datos.gestion_humana_celular,
+    )
     db.add(empresa)
     db.commit()
     db.refresh(empresa)
@@ -57,7 +70,12 @@ def crear_empresa(datos: EmpresaIn, db: Session = Depends(get_db)) -> dict:
 @router.get("/empresas")
 def listar_empresas(db: Session = Depends(get_db)) -> list[dict]:
     return [
-        {"id": e.id, "nombre": e.nombre, "alias": e.alias, "celular": e.celular}
+        {
+            "id": e.id, "nombre": e.nombre, "alias": e.alias, "celular": e.celular,
+            "soporte": e.soporte,
+            "gestion_humana_nombre": e.gestion_humana_nombre,
+            "gestion_humana_celular": e.gestion_humana_celular,
+        }
         for e in db.query(Empresa).order_by(Empresa.id).all()
     ]
 
@@ -73,8 +91,19 @@ def actualizar_empresa(empresa_id: int, datos: EmpresaUpdate, db: Session = Depe
         empresa.alias = datos.alias
     if datos.celular is not None:
         empresa.celular = datos.celular
+    if datos.soporte is not None:
+        empresa.soporte = datos.soporte
+    if datos.gestion_humana_nombre is not None:
+        empresa.gestion_humana_nombre = datos.gestion_humana_nombre
+    if datos.gestion_humana_celular is not None:
+        empresa.gestion_humana_celular = datos.gestion_humana_celular
     db.commit()
-    return {"id": empresa.id, "nombre": empresa.nombre, "alias": empresa.alias, "celular": empresa.celular}
+    return {
+        "id": empresa.id, "nombre": empresa.nombre, "alias": empresa.alias,
+        "celular": empresa.celular, "soporte": empresa.soporte,
+        "gestion_humana_nombre": empresa.gestion_humana_nombre,
+        "gestion_humana_celular": empresa.gestion_humana_celular,
+    }
 
 
 @router.post("/faqs")

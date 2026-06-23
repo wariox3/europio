@@ -73,11 +73,13 @@ def _url_publica(ruta: str) -> str:
     return f"{settings.public_base_url.rstrip('/')}{ruta}"
 
 
-async def _responder_imagen(db: Session, telefono: str, imagen_url: str) -> None:
+async def _responder_imagen(
+    db: Session, telefono: str, imagen_url: str, caption: str | None = None
+) -> None:
     """Envía una imagen del bot por WhatsApp y la registra en el historial."""
     url = _url_publica(imagen_url)
-    registrar_mensaje(db, telefono, "saliente", None, imagen_url=imagen_url)
-    await enviar_imagen(telefono, url)
+    registrar_mensaje(db, telefono, "saliente", caption, imagen_url=imagen_url)
+    await enviar_imagen(telefono, url, caption)
 
 
 # --- helpers de persistencia --------------------------------------------------
@@ -199,6 +201,19 @@ async def enviar_opciones_empresas(telefono: str, candidatos_ids: list[int], db:
 
 # --- transiciones reutilizables -----------------------------------------------
 
+def _mensaje_sin_soporte(empresa: Empresa) -> str:
+    """Mensaje para empresas sin plan de soporte activo."""
+    nombre = empresa.gestion_humana_nombre or "—"
+    celular = empresa.gestion_humana_celular or "—"
+    return (
+        "❌ Tu empresa no cuenta con un plan de soporte activo con Semántica.\n"
+        "Para este tipo de solicitudes, debes contactar directamente a tu "
+        "departamento de Gestión Humana:\n"
+        f"👤 {nombre}\n\n"
+        f"📲 {celular} (WhatsApp)"
+    )
+
+
 async def _ir_a_menu(conv: Conversacion, telefono: str, db: Session, empresa_id: int) -> None:
     conv.empresa_id = empresa_id
     conv.estado = "menu_principal"
@@ -268,14 +283,24 @@ async def procesar_mensaje(
             db.commit()
             return
 
-    # Si no es texto, pide texto y no altera el estado de la conversación.
+    # Si no es texto, no altera el estado de la conversación.
     if es_no_texto:
-        await _responder(
-            db,
-            telefono,
-            "Por ahora solo puedo leer mensajes de texto 🙏. Por favor escríbeme "
-            "tu consulta en un mensaje escrito.",
-        )
+        if imagen_url is not None:
+            # Imagen recibida (y guardada): el bot no puede interpretarla, pide texto.
+            await _responder(
+                db,
+                telefono,
+                "Recibí tu imagen 📷, pero para ayudarte por aquí necesito que me "
+                "escribas tu consulta en *texto* 🙏.",
+            )
+        else:
+            # Audio, video, documento, ubicación, sticker, etc.: no permitido.
+            await _responder(
+                db,
+                telefono,
+                "⚠️ Ese tipo de recurso no está permitido. Por ahora solo puedo "
+                "recibir *texto* o *imágenes* 🙏.",
+            )
         return
 
     # Reinicia si la conversación ya terminó o quedó inactiva mucho tiempo.
@@ -352,6 +377,12 @@ async def procesar_mensaje(
     if conv.estado == "menu_principal":
         # Opción 0: hablar con un asesor humano.
         if texto.strip() == "0":
+            empresa = db.get(Empresa, conv.empresa_id) if conv.empresa_id else None
+            # Empresa sin plan de soporte: no se escala; se deriva a Gestión Humana.
+            # El cliente sigue en el menú y puede seguir autogestionándose con las FAQs.
+            if empresa is not None and not empresa.soporte:
+                await _responder(db, telefono, _mensaje_sin_soporte(empresa))
+                return
             crear_escalamiento(db, telefono, conv.empresa_id, "solicita_asesor", texto)
             conv.estado = "con_asesor"
             conv.opciones = None
@@ -376,11 +407,15 @@ async def procesar_mensaje(
         if faq:
             empresa = db.get(Empresa, conv.empresa_id) if conv.empresa_id else None
             await _responder(db, telefono, aplicar_plantilla(faq.respuesta, empresa))
-            if faq.imagen_url:
-                await _responder_imagen(db, telefono, faq.imagen_url)
             conv.estado = "preguntando_mas"
             db.commit()
-            await _responder(db, telefono, "¿Te puedo ayudar con algo más?\n\n1. Sí\n2. No")
+            prompt = "¿Te puedo ayudar con algo más?\n\n1. Sí\n2. No"
+            # Si la FAQ trae imagen, la pregunta va como caption de la imagen para
+            # garantizar el orden (las imágenes por link de WhatsApp llegan con retraso).
+            if faq.imagen_url:
+                await _responder_imagen(db, telefono, faq.imagen_url, caption=prompt)
+            else:
+                await _responder(db, telefono, prompt)
         else:
             # No se reconoció: vuelve a mostrar el menú y cicla hasta una opción
             # válida (o el cierre por inactividad). No escala automáticamente.

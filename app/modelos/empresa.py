@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Boolean, Column, Integer, String, text
 
 from app.core.db import Base
 
@@ -10,3 +10,8 @@ class Empresa(Base):
     nombre = Column(String(150), nullable=False)
     alias = Column(String(500))  # variantes separadas por coma, refuerzan el fuzzy match
     celular = Column(String(30))  # WhatsApp/teléfono de Gestión Humana de la empresa
+    # ¿La empresa tiene un plan de soporte activo con Semántica?
+    soporte = Column(Boolean, nullable=False, default=True, server_default=text("true"))
+    # Datos de contacto de Gestión Humana, para empresas sin soporte.
+    gestion_humana_nombre = Column(String(150))
+    gestion_humana_celular = Column(String(30))
