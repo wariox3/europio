@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -412,15 +413,15 @@ async def procesar_mensaje(
         if faq:
             empresa = db.get(Empresa, conv.empresa_id) if conv.empresa_id else None
             await _responder(db, telefono, aplicar_plantilla(faq.respuesta, empresa))
+            # Mensajes separados: texto de la FAQ, imagen y luego "¿algo más?".
+            if faq.imagen_url:
+                await _responder_imagen(db, telefono, faq.imagen_url)
+                # Las imágenes por link de WhatsApp llegan con retraso (Meta las
+                # descarga); una breve pausa evita que el texto siguiente se adelante.
+                await asyncio.sleep(2)
             conv.estado = "preguntando_mas"
             db.commit()
-            prompt = "¿Te puedo ayudar con algo más?\n\n1. Sí\n2. No"
-            # Si la FAQ trae imagen, la pregunta va como caption de la imagen para
-            # garantizar el orden (las imágenes por link de WhatsApp llegan con retraso).
-            if faq.imagen_url:
-                await _responder_imagen(db, telefono, faq.imagen_url, caption=prompt)
-            else:
-                await _responder(db, telefono, prompt)
+            await _responder(db, telefono, "¿Te puedo ayudar con algo más?\n\n1. Sí\n2. No")
         else:
             # No se reconoció: vuelve a mostrar el menú y cicla hasta una opción
             # válida (o el cierre por inactividad). No escala automáticamente.
