@@ -379,10 +379,14 @@ async def procesar_mensaje(
         # Opción 0: hablar con un asesor humano.
         if texto.strip() == "0":
             empresa = db.get(Empresa, conv.empresa_id) if conv.empresa_id else None
-            # Empresa sin plan de soporte: no se escala; se deriva a Gestión Humana.
-            # El cliente sigue en el menú y puede seguir autogestionándose con las FAQs.
+            # Empresa sin plan de soporte: no se escala; se deriva a Gestión Humana y
+            # se ofrece seguir autogestionándose con las FAQs.
             if empresa is not None and not empresa.soporte:
                 await _responder(db, telefono, _mensaje_sin_soporte(empresa))
+                conv.estado = "preguntando_mas"
+                conv.opciones = None
+                db.commit()
+                await _responder(db, telefono, "¿Te puedo ayudar con algo más?\n\n1. Sí\n2. No")
                 return
             crear_escalamiento(db, telefono, conv.empresa_id, "solicita_asesor", texto)
             conv.estado = "con_asesor"
