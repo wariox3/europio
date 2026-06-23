@@ -114,6 +114,84 @@ def create_app() -> FastAPI:
 </body>
 </html>"""
 
+    @app.get("/privacidad", response_class=HTMLResponse, tags=["legal"])
+    async def privacidad() -> str:
+        # Política de privacidad pública requerida por Meta para publicar la app.
+        # AJUSTA: nombre de la empresa y correo de contacto (marcados abajo).
+        empresa = "Semántica Digital"
+        correo = "contacto@semanticadigital.com"  # AJUSTA este correo
+        return f"""<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Política de Privacidad · {settings.app_name}</title>
+  <style>
+    body {{
+      margin: 0;
+      padding: 2.5rem 1rem;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      line-height: 1.6;
+    }}
+    main {{
+      max-width: 760px;
+      margin: 0 auto;
+      background: #1e293b;
+      border-radius: 16px;
+      padding: 2.5rem;
+      box-shadow: 0 10px 40px rgba(0,0,0,.35);
+    }}
+    h1 {{ font-size: 1.6rem; margin-top: 0; }}
+    h2 {{ font-size: 1.15rem; margin-top: 2rem; color: #93c5fd; }}
+    a {{ color: #93c5fd; }}
+    .fecha {{ color: #64748b; font-size: .85rem; }}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Política de Privacidad</h1>
+    <p class="fecha">Última actualización: 22 de junio de 2026</p>
+
+    <p>Esta política describe cómo <strong>{empresa}</strong> ("nosotros") trata
+    la información de las personas que se comunican con nuestro servicio de
+    atención al cliente a través de WhatsApp.</p>
+
+    <h2>1. Qué datos recogemos</h2>
+    <p>Cuando nos escribes por WhatsApp, recogemos únicamente:</p>
+    <ul>
+      <li>Tu número de teléfono de WhatsApp.</li>
+      <li>El contenido de los mensajes que nos envías (texto e imágenes).</li>
+      <li>La empresa que indicas para darle contexto a tu consulta.</li>
+    </ul>
+
+    <h2>2. Para qué los usamos</h2>
+    <p>Usamos estos datos exclusivamente para atender tu consulta, responderte de
+    forma automática o derivar la conversación a un asesor humano cuando sea
+    necesario. No los usamos con fines publicitarios.</p>
+
+    <h2>3. Con quién los compartimos</h2>
+    <p>No vendemos ni cedemos tus datos a terceros. La mensajería se procesa a
+    través de la plataforma WhatsApp Business de Meta, sujeta a sus propias
+    condiciones.</p>
+
+    <h2>4. Cuánto tiempo los conservamos</h2>
+    <p>Conservamos el historial de la conversación el tiempo necesario para
+    prestarte el servicio de soporte y cumplir obligaciones legales. Puedes
+    solicitar su eliminación escribiéndonos.</p>
+
+    <h2>5. Tus derechos</h2>
+    <p>Puedes solicitar acceder, rectificar o eliminar tus datos en cualquier
+    momento escribiendo a <a href="mailto:{correo}">{correo}</a>.</p>
+
+    <h2>6. Contacto</h2>
+    <p>Para cualquier duda sobre esta política, escríbenos a
+    <a href="mailto:{correo}">{correo}</a>.</p>
+  </main>
+</body>
+</html>"""
+
     @app.get("/health", tags=["health"])
     async def health() -> dict[str, str]:
         return {"status": "ok", "app": settings.app_name}
