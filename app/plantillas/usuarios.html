@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Usuarios · Soporte europio{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;gap:.8rem;">
+  <h2 style="margin:0;">Usuarios</h2>
+  <a href="/panel/usuarios/nuevo" role="button" style="width:auto;padding:.3rem .8rem;">+ Nuevo usuario</a>
+</div>
+
+{% if not usuarios %}
+  <p>No hay usuarios registrados.</p>
+{% else %}
+<table>
+  <thead>
+    <tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Estado</th><th></th></tr>
+  </thead>
+  <tbody>
+  {% for u in usuarios %}
+    <tr>
+      <td>{{ u.nombre }}</td>
+      <td>{{ u.email }}</td>
+      <td><kbd>{{ u.rol }}</kbd></td>
+      <td>{{ "Activo" if u.activo else "Inactivo" }}</td>
+      <td><a href="/panel/usuarios/{{ u.id }}/editar" role="button" class="secondary outline"
+             style="width:auto;padding:.2rem .6rem;font-size:.8rem;">Editar</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

@@ -6,8 +6,10 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import get_db
+from app.core.seguridad import ROLES, hash_password
 from app.modelos.empresa import Empresa
 from app.modelos.faq import Faq
+from app.modelos.usuario import Usuario
 
 
 def verificar_api_key(x_api_key: str = Header(default="")) -> None:
@@ -47,6 +49,20 @@ class FaqUpdate(BaseModel):
     tema: str | None = None
     pregunta_corta: str | None = None
     respuesta: str | None = None
+
+
+class UsuarioIn(BaseModel):
+    email: str
+    nombre: str
+    password: str
+    rol: str = "asesor"
+
+
+class UsuarioUpdate(BaseModel):
+    nombre: str | None = None
+    rol: str | None = None
+    activo: bool | None = None
+    password: str | None = None
 
 
 @router.post("/empresas")
@@ -131,3 +147,60 @@ def actualizar_faq(faq_id: int, datos: FaqUpdate, db: Session = Depends(get_db))
         faq.respuesta = datos.respuesta
     db.commit()
     return {"id": faq.id, "tema": faq.tema, "pregunta_corta": faq.pregunta_corta, "respuesta": faq.respuesta}
+
+
+# --- Usuarios y roles ---------------------------------------------------------
+# Estos endpoints están protegidos por X-API-Key (credencial de superadmin):
+# solo quien tiene la clave puede crear/gestionar usuarios.
+
+def _usuario_dict(u: Usuario) -> dict:
+    return {"id": u.id, "email": u.email, "nombre": u.nombre, "rol": u.rol, "activo": u.activo}
+
+
+@router.get("/roles")
+def listar_roles() -> dict:
+    """Roles disponibles para asignar a un usuario."""
+    return {"roles": list(ROLES)}
+
+
+@router.post("/usuarios")
+def crear_usuario(datos: UsuarioIn, db: Session = Depends(get_db)) -> dict:
+    if datos.rol not in ROLES:
+        raise HTTPException(status_code=422, detail=f"Rol inválido. Use uno de: {', '.join(ROLES)}")
+    email = datos.email.strip().lower()
+    if db.query(Usuario).filter(Usuario.email == email).first():
+        raise HTTPException(status_code=409, detail="Ya existe un usuario con ese correo")
+    usuario = Usuario(
+        email=email,
+        nombre=datos.nombre.strip(),
+        password_hash=hash_password(datos.password),
+        rol=datos.rol,
+    )
+    db.add(usuario)
+    db.commit()
+    db.refresh(usuario)
+    return _usuario_dict(usuario)
+
+
+@router.get("/usuarios")
+def listar_usuarios(db: Session = Depends(get_db)) -> list[dict]:
+    return [_usuario_dict(u) for u in db.query(Usuario).order_by(Usuario.id).all()]
+
+
+@router.patch("/usuarios/{usuario_id}")
+def actualizar_usuario(usuario_id: int, datos: UsuarioUpdate, db: Session = Depends(get_db)) -> dict:
+    usuario = db.get(Usuario, usuario_id)
+    if usuario is None:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if datos.rol is not None:
+        if datos.rol not in ROLES:
+            raise HTTPException(status_code=422, detail=f"Rol inválido. Use uno de: {', '.join(ROLES)}")
+        usuario.rol = datos.rol
+    if datos.nombre is not None:
+        usuario.nombre = datos.nombre.strip()
+    if datos.activo is not None:
+        usuario.activo = datos.activo
+    if datos.password is not None:
+        usuario.password_hash = hash_password(datos.password)
+    db.commit()
+    return _usuario_dict(usuario)

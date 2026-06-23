@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ "Editar" if editado else "Nuevo" }} usuario · Soporte europio{% endblock %}
+{% block content %}
+<h2>{{ "Editar usuario" if editado else "Nuevo usuario" }}</h2>
+
+{% if error %}
+<p style="color:var(--pico-color-red-500);">{{ error }}</p>
+{% endif %}
+
+<form method="post"
+      action="{{ '/panel/usuarios/' ~ editado.id ~ '/editar' if editado else '/panel/usuarios/nuevo' }}"
+      style="max-width:32rem;">
+  <label>Nombre
+    <input type="text" name="nombre" required value="{{ editado.nombre if editado else '' }}">
+  </label>
+
+  <label>Correo
+    {% if editado %}
+      <input type="email" value="{{ editado.email }}" readonly>
+    {% else %}
+      <input type="email" name="email" required>
+    {% endif %}
+  </label>
+
+  <label>Rol
+    <select name="rol">
+      {% for r in roles %}
+        <option value="{{ r }}" {{ 'selected' if editado and editado.rol == r else '' }}>{{ r }}</option>
+      {% endfor %}
+    </select>
+  </label>
+
+  {% if editado %}
+  <label>
+    <input type="checkbox" name="activo" role="switch" {{ 'checked' if editado.activo else '' }}>
+    Activo
+  </label>
+  {% endif %}
+
+  <label>Contraseña{% if editado %} <small>(dejar en blanco para no cambiarla)</small>{% endif %}
+    <input type="password" name="password" {{ 'required' if not editado else '' }}
+           autocomplete="new-password">
+  </label>
+
+  <div style="display:flex;gap:.6rem;">
+    <button type="submit" style="width:auto;margin:0;">Guardar</button>
+    <a href="/panel/usuarios" role="button" class="secondary" style="width:auto;margin:0;">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

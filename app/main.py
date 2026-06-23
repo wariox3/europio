@@ -9,7 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.core.config import settings
 from app.core.seguridad import NoAutenticado
-from app.routers import admin, panel, webhook
+from app.routers import admin, panel, usuarios, webhook
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +67,7 @@ def create_app() -> FastAPI:
     app.include_router(webhook.router)
     app.include_router(admin.router)
     app.include_router(panel.router)
+    app.include_router(usuarios.router)
 
     @app.get("/", response_class=HTMLResponse, tags=["inicio"])
     async def inicio() -> str:

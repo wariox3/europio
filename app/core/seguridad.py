@@ -1,9 +1,14 @@
 import bcrypt
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.modelos.usuario import Usuario
+
+# Roles disponibles. "superadmin" es el único que puede gestionar usuarios.
+ROL_SUPERADMIN = "superadmin"
+ROL_ASESOR = "asesor"
+ROLES = (ROL_SUPERADMIN, ROL_ASESOR)
 
 
 class NoAutenticado(Exception):
@@ -29,4 +34,11 @@ def usuario_actual(request: Request, db: Session = Depends(get_db)) -> Usuario:
     usuario = db.get(Usuario, uid)
     if usuario is None or not usuario.activo:
         raise NoAutenticado()
+    return usuario
+
+
+def requiere_superadmin(usuario: Usuario = Depends(usuario_actual)) -> Usuario:
+    """Dependencia: exige que el usuario en sesión tenga rol superadmin."""
+    if usuario.rol != ROL_SUPERADMIN:
+        raise HTTPException(status_code=403, detail="Requiere rol superadmin")
     return usuario

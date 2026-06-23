@@ -15,6 +15,7 @@
       <ul><li><strong>Soporte europio</strong></li></ul>
       <ul>
         <li><a href="/panel">Bandeja</a></li>
+        {% if usuario.rol == "superadmin" %}<li><a href="/panel/usuarios">Usuarios</a></li>{% endif %}
         <li><small>{{ usuario.nombre }}</small></li>
         <li><a href="/panel/logout" role="button" class="secondary outline">Salir</a></li>
       </ul>
