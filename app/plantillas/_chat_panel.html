@@ -24,13 +24,17 @@
     <ul>
       {% if conv.estado == "con_asesor" %}
       <li><a href="#" onclick="document.getElementById('img-dialog').showModal();return false;">🖼️ Enviar imagen</a></li>
+      {% endif %}
+      {% if conv.estado != "finalizada" %}
       <li><a href="#"
              hx-post="/panel/conversaciones/{{ telefono }}/cerrar" hx-target="#chat-panel"
              hx-confirm="¿Cerrar esta conversación? El cliente volverá al bot si escribe de nuevo.">✅ Cerrar</a></li>
       {% endif %}
+      {% if conv.estado in ("con_asesor", "finalizada") %}
       <li><a href="#" class="danger"
              hx-post="/panel/conversaciones/{{ telefono }}/eliminar" hx-target="#chat-panel"
              hx-confirm="¿Eliminar esta conversación y TODOS sus mensajes? Esta acción no se puede deshacer.">🗑️ Eliminar</a></li>
+      {% endif %}
     </ul>
   </details>
 

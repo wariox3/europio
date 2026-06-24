@@ -208,10 +208,14 @@ def chats(
     usuario: Usuario = Depends(usuario_actual),
 ):
     filtro = _resolver_filtro(request, filtro)
+    items = _lista_conversaciones(db, filtro)
+    # Si no se pidió un chat concreto, abre la primera conversación del filtro.
+    if not chat and items:
+        chat = items[0]["telefono"]
     ctx = {
         "request": request,
         "usuario": usuario,
-        "items": _lista_conversaciones(db, filtro),
+        "items": items,
         "filtro": filtro,
         "chat": False,
     }

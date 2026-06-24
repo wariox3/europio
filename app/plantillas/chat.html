@@ -13,6 +13,7 @@
   .wa-item { display:block; padding:.55rem .8rem;
              border-bottom:1px solid var(--pico-muted-border-color); color:inherit; text-decoration:none; }
   .wa-item:hover { background:#f5f6f6; }
+  .wa-item.activo { background:#e9edef; }
   .wa-item .row1 { display:flex; justify-content:space-between; align-items:baseline; gap:.5rem; }
   .wa-item .row2 { display:flex; justify-content:space-between; align-items:center; gap:.4rem; margin-top:.1rem; }
   .badge { background:#25d366; color:#fff; border-radius:1rem; min-width:1.1rem; height:1.1rem;
@@ -54,13 +55,13 @@
 {% block content %}
 <div style="display:flex;align-items:center;gap:.6rem;padding:.3rem .8rem;">
   <h2 style="margin:0;">Chats</h2>
-  <a href="/panel?filtro=todos{% if telefono %}&chat={{ telefono }}{% endif %}" role="button"
+  <a href="/panel?filtro=todos" role="button"
      class="{{ '' if not filtro else 'outline secondary' }}"
      style="padding:.15rem .7rem;font-size:.8rem;margin:0;">Todos</a>
-  <a href="/panel?filtro=bot{% if telefono %}&chat={{ telefono }}{% endif %}" role="button"
+  <a href="/panel?filtro=bot" role="button"
      class="{{ '' if filtro == 'bot' else 'outline secondary' }}"
      style="padding:.15rem .7rem;font-size:.8rem;margin:0;">Bot</a>
-  <a href="/panel?filtro=asesor{% if telefono %}&chat={{ telefono }}{% endif %}" role="button"
+  <a href="/panel?filtro=asesor" role="button"
      class="{{ '' if filtro == 'asesor' else 'outline secondary' }}"
      style="padding:.15rem .7rem;font-size:.8rem;margin:0;">Asesor</a>
 </div>
@@ -79,6 +80,20 @@
 </div>
 
 <script>
+  // Conversación abierta (la primera del filtro al cargar; cambia al hacer clic).
+  window.__chatActivo = "{{ telefono if chat else '' }}";
+  function marcarActivo() {
+    var tel = window.__chatActivo;
+    document.querySelectorAll('.wa-item').forEach(function (a) {
+      a.classList.toggle('activo', !!tel && a.dataset.tel === tel);
+    });
+  }
+  document.addEventListener('DOMContentLoaded', marcarActivo);
+  document.body.addEventListener('click', function (e) {
+    var item = e.target.closest('.wa-item');
+    if (item) { window.__chatActivo = item.dataset.tel; marcarActivo(); }
+  });
+
   function alFondo() {
     var m = document.getElementById('wa-msgs');
     if (m) m.scrollTop = m.scrollHeight;
@@ -97,6 +112,7 @@
 
   document.body.addEventListener('htmx:afterSettle', function (e) {
     var t = e.detail.target;
+    if (t && t.id === 'wa-lista') { marcarActivo(); return; } // tras refrescar la lista
     if (t && t.id === 'chat-panel') { alFondo(); return; }   // abrió un chat o envió/cerró
     if (t && t.id === 'wa-msgs') {                            // refresco en vivo de mensajes
       var m = document.getElementById('wa-msgs');

@@ -1,5 +1,5 @@
 {% for it in items %}
-<a class="wa-item" href="/panel?chat={{ it.telefono }}"
+<a class="wa-item" data-tel="{{ it.telefono }}" href="/panel?chat={{ it.telefono }}"
    hx-get="/panel/chat/{{ it.telefono }}" hx-target="#chat-panel" hx-push-url="/panel?chat={{ it.telefono }}">
   <div class="row1">
     <span class="tit">📱 {{ it.telefono }}{% if it.nombre %} · {{ it.nombre }}{% endif %}{% if it.con_asesor %}<span class="dot" title="Esperando asesor"></span>{% endif %}</span>
