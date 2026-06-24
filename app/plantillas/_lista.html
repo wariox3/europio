@@ -2,11 +2,11 @@
 <a class="wa-item" href="/panel?chat={{ it.telefono }}"
    hx-get="/panel/chat/{{ it.telefono }}" hx-target="#chat-panel" hx-push-url="/panel?chat={{ it.telefono }}">
   <div class="row1">
-    <span class="tit">{{ it.empresa or it.telefono }}{% if it.con_asesor %}<span class="dot" title="Esperando asesor"></span>{% endif %}</span>
+    <span class="tit">📱 {{ it.telefono }}{% if it.nombre %} · {{ it.nombre }}{% endif %}{% if it.con_asesor %}<span class="dot" title="Esperando asesor"></span>{% endif %}</span>
     <span class="fecha">{{ it.fecha }}</span>
   </div>
   <div class="row2">
-    <span class="prev">{{ it.telefono }} · {{ it.ultimo[:40] }}</span>
+    <span class="prev">{% if it.empresa %}{{ it.empresa }} · {% endif %}{{ it.ultimo[:40] }}</span>
     {% if it.no_leidos %}<span class="badge">{{ it.no_leidos }}</span>{% endif %}
     <span class="estado">{{ it.estado }}</span>
   </div>

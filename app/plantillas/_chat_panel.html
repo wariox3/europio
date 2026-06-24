@@ -1,3 +1,11 @@
+<div style="display:flex;flex-direction:column;gap:.05rem;padding:.45rem .8rem;
+            border-bottom:1px solid var(--pico-muted-border-color);background:#f0f2f5;">
+  <strong style="font-size:.82rem;">{{ (conv.nombre if conv else None) or empresa or telefono }}</strong>
+  <span style="font-size:.72rem;color:#54656f;">
+    📱 {{ telefono }}{% if empresa %} · {{ empresa }}{% endif %}
+  </span>
+</div>
+
 {% if error == "envio" %}
 <p style="color:var(--pico-color-red-500);padding:.4rem .8rem;margin:0;">
   No se pudo enviar (¿ventana de 24 h cerrada o token?). Revisa el log.

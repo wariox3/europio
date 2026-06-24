@@ -180,7 +180,8 @@ async def enviar_menu_principal(telefono: str, db: Session) -> list[int]:
     cuerpo = (
         "¡Genial! 🙌 ¿Sobre qué tema necesitas ayuda?\n\n"
         + "\n".join(lineas)
-        + "\n0. Hablar con un asesor 🧑‍💼"
+        + "\n9. Hablar con un asesor 🧑‍💼"
+        + "\n0. Ya no necesito ayuda. ¡Gracias! 👋"
         + "\n\nResponde con el *número* de la opción."
     )
     await _responder(db, telefono, cuerpo)
@@ -223,6 +224,22 @@ async def _ir_a_menu(conv: Conversacion, telefono: str, db: Session, empresa_id:
     ids = await enviar_menu_principal(telefono, db)
     _guardar_opciones(conv, ids)
     db.commit()
+
+
+async def _confirmar_empresa(conv: Conversacion, telefono: str, db: Session, empresa_id: int) -> None:
+    """Pide confirmar la empresa que dio match antes de entrar al menú."""
+    empresa = db.get(Empresa, empresa_id)
+    conv.empresa_id = empresa_id  # tentativa; solo se asume al confirmar
+    conv.estado = "confirmando_match"
+    conv.opciones = None
+    db.commit()
+    await _responder(
+        db,
+        telefono,
+        f"Encontré a *{empresa.nombre}*. ¿Es tu empresa?\n\n"
+        "1. Confirmar empresa\n"
+        "2. Trabajo en otra empresa (volver a escoger)",
+    )
 
 
 async def _escalar_empresa(conv: Conversacion, telefono: str, db: Session, texto: str) -> None:
@@ -317,10 +334,51 @@ async def procesar_mensaje(
             db,
             telefono,
             "¡Hola! 👋 Te damos la bienvenida al canal de soporte del portal de "
-            "empleados. Para empezar, cuéntame: ¿en qué empresa trabajas?",
+            "empleados.\n\n"
+            "ℹ️ Al continuar esta conversación autorizas el *tratamiento de tus datos "
+            "personales* y aceptas nuestros *términos y condiciones*. "
+            f"Puedes consultarlos aquí: {_url_publica('/privacidad')}\n\n"
+            "Para empezar, cuéntame: ¿en qué empresa trabajas?",
         )
         conv.estado = "esperando_empresa"
         db.commit()
+        return
+
+    if conv.estado == "confirmando_match":
+        t = texto.strip()
+        if t == "1":  # confirma la empresa que dio match; ahora pedimos su nombre
+            conv.estado = "esperando_nombre"
+            conv.opciones = None
+            db.commit()
+            await _responder(
+                db, telefono,
+                "¡Perfecto! 🙌 Antes de continuar, ¿cuál es tu *nombre*?",
+            )
+        elif t == "2":  # trabaja en otra: vuelve a pedir el nombre de la empresa
+            conv.estado = "esperando_empresa"
+            conv.empresa_id = None
+            conv.opciones = None
+            db.commit()
+            await _responder(
+                db, telefono,
+                "De acuerdo 🙌 Escríbeme el *nombre de tu empresa*.",
+            )
+        else:
+            empresa = db.get(Empresa, conv.empresa_id) if conv.empresa_id else None
+            nombre = empresa.nombre if empresa else "tu empresa"
+            await _responder(
+                db, telefono,
+                f"Por favor responde *1* para confirmar *{nombre}* o *2* si "
+                "trabajas en otra empresa.",
+            )
+        return
+
+    if conv.estado == "esperando_nombre":
+        # Guarda (o actualiza) el nombre y entra al menú saludando con él.
+        conv.nombre = texto.strip()[:120]
+        db.commit()
+        await _responder(db, telefono, f"¡Mucho gusto, {conv.nombre}! 😊")
+        await _ir_a_menu(conv, telefono, db, conv.empresa_id)
         return
 
     if conv.estado in ("esperando_empresa", "confirmando_empresa"):
@@ -353,7 +411,7 @@ async def procesar_mensaje(
         empresas = db.query(Empresa).all()
         resultado = resolver_empresa(texto, empresas)
         if resultado["match"]:
-            await _ir_a_menu(conv, telefono, db, resultado["match"])
+            await _confirmar_empresa(conv, telefono, db, resultado["match"])
         elif resultado["candidatos"]:
             conv.estado = "confirmando_empresa"
             ids = await enviar_opciones_empresas(telefono, resultado["candidatos"], db)
@@ -377,8 +435,20 @@ async def procesar_mensaje(
         return
 
     if conv.estado == "menu_principal":
-        # Opción 0: hablar con un asesor humano.
+        # Opción 0: el usuario ya no necesita ayuda; cierra la conversación.
         if texto.strip() == "0":
+            conv.estado = "finalizada"
+            conv.cerrada_en = _ahora()
+            conv.opciones = None
+            db.commit()
+            await _responder(
+                db, telefono,
+                "¡Gracias por escribirnos! 👋 Que tengas un buen día.",
+            )
+            return
+
+        # Opción 9: hablar con un asesor humano.
+        if texto.strip() == "9":
             empresa = db.get(Empresa, conv.empresa_id) if conv.empresa_id else None
             # Empresa sin plan de soporte: no se escala; se deriva a Gestión Humana y
             # se ofrece seguir autogestionándose con las FAQs.
@@ -429,7 +499,7 @@ async def procesar_mensaje(
                 db,
                 telefono,
                 "No entendí esa opción 🤔. Por favor responde con el *número* de una "
-                "de estas (o *0* para hablar con un asesor):",
+                "de estas (o *9* para hablar con un asesor):",
             )
             ids = await enviar_menu_principal(telefono, db)
             _guardar_opciones(conv, ids)

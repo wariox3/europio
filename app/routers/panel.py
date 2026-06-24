@@ -30,14 +30,32 @@ router = APIRouter(prefix="/panel", tags=["panel"])
 
 # --- helpers ------------------------------------------------------------------
 
+def _resolver_filtro(request: Request, filtro: str | None) -> str | None:
+    """Resuelve el filtro activo de chats y lo persiste en la sesión.
+
+    Si llega un valor en la URL ("bot"/"asesor" o "todos" para limpiar) se guarda
+    en sesión; si no llega ninguno, se reutiliza el último guardado.
+    """
+    if filtro is not None:
+        valor = filtro if filtro in ("bot", "asesor") else None
+        request.session["filtro_chats"] = valor
+        return valor
+    return request.session.get("filtro_chats")
+
+
 def _lista_conversaciones(db: Session, filtro: str | None = None) -> list[dict]:
     """Conversaciones para el panel izquierdo, ordenadas por último mensaje.
 
-    filtro="espera" -> solo las que esperan atención de un asesor (con_asesor).
+    filtro="asesor" -> solo las atendidas por un asesor (con_asesor).
+    filtro="bot"    -> solo las que gestiona el bot (ni con asesor ni cerradas).
     """
     consulta = db.query(Conversacion)
-    if filtro == "espera":
+    if filtro == "asesor":
         consulta = consulta.filter(Conversacion.estado == "con_asesor")
+    elif filtro == "bot":
+        consulta = consulta.filter(
+            Conversacion.estado.notin_(("con_asesor", "finalizada"))
+        )
     items = []
     for c in consulta.all():
         ultimo = (
@@ -49,6 +67,7 @@ def _lista_conversaciones(db: Session, filtro: str | None = None) -> list[dict]:
         empresa = db.get(Empresa, c.empresa_id) if c.empresa_id else None
         items.append({
             "telefono": c.telefono,
+            "nombre": c.nombre,
             "empresa": empresa.nombre if empresa else None,
             "ultimo": (
                 ultimo.texto if ultimo and ultimo.texto
@@ -188,6 +207,7 @@ def chats(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(usuario_actual),
 ):
+    filtro = _resolver_filtro(request, filtro)
     ctx = {
         "request": request,
         "usuario": usuario,
@@ -208,6 +228,7 @@ def fragmento_lista(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(usuario_actual),
 ):
+    filtro = _resolver_filtro(request, filtro)
     return templates.TemplateResponse(
         "_lista.html", {"request": request, "items": _lista_conversaciones(db, filtro)}
     )
@@ -304,8 +325,14 @@ def eliminar(
     return RedirectResponse("/panel", status_code=303)
 
 
+MENSAJE_CIERRE_INACTIVIDAD = (
+    "Cerramos esta conversación por inactividad 🕒. "
+    "Si necesitas algo más, escríbenos de nuevo cuando quieras y con gusto te ayudamos. 👋"
+)
+
+
 @router.post("/conversaciones/{telefono}/cerrar")
-def cerrar(
+async def cerrar(
     telefono: str,
     request: Request,
     db: Session = Depends(get_db),
@@ -320,6 +347,12 @@ def cerrar(
         Escalamiento.telefono == telefono, Escalamiento.atendido.is_(False)
     ).update({"atendido": True})
     db.commit()
+    # Avisa al usuario del cierre por inactividad y deja el aviso en el historial.
+    try:
+        await enviar_mensaje(telefono, MENSAJE_CIERRE_INACTIVIDAD)
+        registrar_mensaje(db, telefono, "saliente", MENSAJE_CIERRE_INACTIVIDAD, usuario_id=usuario.id)
+    except Exception:
+        logger.exception("Error enviando aviso de cierre por inactividad a %s", telefono)
     # Recarga completa para refrescar la lista de la izquierda.
     if request.headers.get("HX-Request"):
         return Response(status_code=204, headers={"HX-Redirect": f"/panel?chat={telefono}"})

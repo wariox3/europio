@@ -7,6 +7,7 @@ from app.modelos.empresa import Empresa
 
 UMBRAL_MATCH = 85       # >= se considera coincidencia directa
 UMBRAL_CANDIDATO = 60   # >= se ofrece como candidato a confirmar
+MAX_PALABRAS_NOMBRE = 8  # más palabras = es una frase, no el nombre de una empresa
 
 _SUFIJOS = re.compile(r"\b(sas|s\.a\.s|ltda|s\.a\.|sa)\b")
 
@@ -43,7 +44,15 @@ def resolver_empresa(texto_usuario: str, empresas: list[Empresa]) -> dict:
         return {"match": None, "candidatos": []}
 
     texto_norm = normalizar(texto_usuario)
-    resultados = process.extract(texto_norm, candidatos_texto, scorer=fuzz.WRatio, limit=5)
+    # Si el usuario escribió una frase larga (p. ej. una consulta de soporte en
+    # vez del nombre), no la tratamos como nombre de empresa: evita falsos
+    # positivos del fuzzy match contra textos largos.
+    if len(texto_norm.split()) > MAX_PALABRAS_NOMBRE:
+        return {"match": None, "candidatos": []}
+
+    # token_ratio (no WRatio): no usa partial_ratio, que premiaba que el nombre
+    # corto apareciera como subcadena dentro de una frase larga e inflaba el score.
+    resultados = process.extract(texto_norm, candidatos_texto, scorer=fuzz.token_ratio, limit=5)
     if not resultados:
         return {"match": None, "candidatos": []}
 

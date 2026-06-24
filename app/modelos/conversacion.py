@@ -14,6 +14,7 @@ class Conversacion(Base):
 
     id = Column(Integer, primary_key=True)
     telefono = Column(String(20), nullable=False, unique=True, index=True)
+    nombre = Column(String(120), nullable=True)  # nombre que el usuario indicó
     empresa_id = Column(Integer, nullable=True)
     estado = Column(String(30), default="inicio")
     # IDs (separados por coma) de las opciones del último menú numerado mostrado,

@@ -54,12 +54,15 @@
 {% block content %}
 <div style="display:flex;align-items:center;gap:.6rem;padding:.3rem .8rem;">
   <h2 style="margin:0;">Chats</h2>
-  <a href="/panel{% if telefono %}?chat={{ telefono }}{% endif %}" role="button"
-     class="{{ 'outline secondary' if filtro == 'espera' else '' }}"
+  <a href="/panel?filtro=todos{% if telefono %}&chat={{ telefono }}{% endif %}" role="button"
+     class="{{ '' if not filtro else 'outline secondary' }}"
      style="padding:.15rem .7rem;font-size:.8rem;margin:0;">Todos</a>
-  <a href="/panel?filtro=espera{% if telefono %}&chat={{ telefono }}{% endif %}" role="button"
-     class="{{ '' if filtro == 'espera' else 'outline secondary' }}"
-     style="padding:.15rem .7rem;font-size:.8rem;margin:0;">En espera</a>
+  <a href="/panel?filtro=bot{% if telefono %}&chat={{ telefono }}{% endif %}" role="button"
+     class="{{ '' if filtro == 'bot' else 'outline secondary' }}"
+     style="padding:.15rem .7rem;font-size:.8rem;margin:0;">Bot</a>
+  <a href="/panel?filtro=asesor{% if telefono %}&chat={{ telefono }}{% endif %}" role="button"
+     class="{{ '' if filtro == 'asesor' else 'outline secondary' }}"
+     style="padding:.15rem .7rem;font-size:.8rem;margin:0;">Asesor</a>
 </div>
 <div class="wa">
   <aside class="wa-lista" id="wa-lista"
