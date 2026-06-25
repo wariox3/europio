@@ -329,9 +329,9 @@ def eliminar(
     return RedirectResponse("/panel", status_code=303)
 
 
-MENSAJE_CIERRE_INACTIVIDAD = (
-    "Cerramos esta conversación por inactividad 🕒. "
-    "Si necesitas algo más, escríbenos de nuevo cuando quieras y con gusto te ayudamos. 👋"
+MENSAJE_CIERRE_ASESOR = (
+    "Fue un gusto atenderte 😊. Esperamos haberte ayudado. "
+    "Cuando lo necesites, escríbenos de nuevo a nuestro canal de soporte. ¡Que tengas un excelente día! 👋"
 )
 
 
@@ -343,6 +343,9 @@ async def cerrar(
     usuario: Usuario = Depends(usuario_actual),
 ):
     conv = db.query(Conversacion).filter(Conversacion.telefono == telefono).first()
+    # Solo se despide al usuario si la conversación la estaba atendiendo un asesor;
+    # si la gestionaba el bot, se cierra en silencio (sin enviar mensaje).
+    cerrada_por_asesor = conv is not None and conv.estado == "con_asesor"
     if conv is not None:
         conv.estado = "finalizada"
         conv.cerrada_en = datetime.now(timezone.utc)
@@ -351,12 +354,13 @@ async def cerrar(
         Escalamiento.telefono == telefono, Escalamiento.atendido.is_(False)
     ).update({"atendido": True})
     db.commit()
-    # Avisa al usuario del cierre por inactividad y deja el aviso en el historial.
-    try:
-        await enviar_mensaje(telefono, MENSAJE_CIERRE_INACTIVIDAD)
-        registrar_mensaje(db, telefono, "saliente", MENSAJE_CIERRE_INACTIVIDAD, usuario_id=usuario.id)
-    except Exception:
-        logger.exception("Error enviando aviso de cierre por inactividad a %s", telefono)
+    # Despedida del asesor: avisa al usuario del cierre y lo deja en el historial.
+    if cerrada_por_asesor:
+        try:
+            await enviar_mensaje(telefono, MENSAJE_CIERRE_ASESOR)
+            registrar_mensaje(db, telefono, "saliente", MENSAJE_CIERRE_ASESOR, usuario_id=usuario.id)
+        except Exception:
+            logger.exception("Error enviando despedida de cierre a %s", telefono)
     # Recarga completa para refrescar la lista de la izquierda.
     if request.headers.get("HX-Request"):
         return Response(status_code=204, headers={"HX-Redirect": f"/panel?chat={telefono}"})
