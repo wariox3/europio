@@ -25,6 +25,11 @@
       {% if conv.estado == "con_asesor" %}
       <li><a href="#" onclick="document.getElementById('img-dialog').showModal();return false;">🖼️ Enviar imagen</a></li>
       {% endif %}
+      {% if conv.estado not in ("con_asesor", "finalizada") %}
+      <li><a href="#"
+             hx-post="/panel/conversaciones/{{ telefono }}/escalar" hx-target="#chat-panel"
+             hx-confirm="¿Atender esta conversación como asesor? El bot dejará de responder.">🙋 Atender como asesor</a></li>
+      {% endif %}
       {% if conv.estado != "finalizada" %}
       <li><a href="#"
              hx-post="/panel/conversaciones/{{ telefono }}/cerrar" hx-target="#chat-panel"

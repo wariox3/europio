@@ -17,7 +17,7 @@ from app.modelos.empresa import Empresa
 from app.modelos.escalamiento import Escalamiento
 from app.modelos.mensaje import Mensaje
 from app.modelos.usuario import Usuario
-from app.servicios.flujo import registrar_mensaje
+from app.servicios.flujo import crear_escalamiento, registrar_mensaje
 from app.servicios.whatsapp import enviar_imagen, enviar_mensaje
 
 logger = logging.getLogger(__name__)
@@ -362,6 +362,38 @@ async def cerrar(
         except Exception:
             logger.exception("Error enviando despedida de cierre a %s", telefono)
     # Recarga completa para refrescar la lista de la izquierda.
+    if request.headers.get("HX-Request"):
+        return Response(status_code=204, headers={"HX-Redirect": f"/panel?chat={telefono}"})
+    return RedirectResponse("/panel", status_code=303)
+
+
+MENSAJE_ESCALAR_ASESOR = (
+    "En un momento un asesor continúa tu conversación 🙌. "
+    "Cuéntanos en qué te podemos ayudar."
+)
+
+
+@router.post("/conversaciones/{telefono}/escalar")
+async def escalar(
+    telefono: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(usuario_actual),
+):
+    conv = db.query(Conversacion).filter(Conversacion.telefono == telefono).first()
+    # Solo se escala desde el panel si la gestiona el bot (no con_asesor ni finalizada).
+    if conv is not None and conv.estado not in ("con_asesor", "finalizada"):
+        crear_escalamiento(db, telefono, conv.empresa_id, "asignado_por_asesor", "")
+        conv.estado = "con_asesor"
+        conv.opciones = None
+        db.commit()
+        # Avisa al usuario que un asesor toma la conversación y lo deja en el historial.
+        try:
+            await enviar_mensaje(telefono, MENSAJE_ESCALAR_ASESOR)
+            registrar_mensaje(db, telefono, "saliente", MENSAJE_ESCALAR_ASESOR, usuario_id=usuario.id)
+        except Exception:
+            logger.exception("Error avisando al usuario del escalamiento a asesor: %s", telefono)
+    # Recarga completa: la conversación cambia de grupo (bot -> asesor) en la lista.
     if request.headers.get("HX-Request"):
         return Response(status_code=204, headers={"HX-Redirect": f"/panel?chat={telefono}"})
     return RedirectResponse("/panel", status_code=303)

@@ -180,6 +180,7 @@ async def enviar_menu_principal(telefono: str, db: Session) -> list[int]:
     cuerpo = (
         "¡Genial! 🙌 ¿Sobre qué tema necesitas ayuda?\n\n"
         + "\n".join(lineas)
+        + "\n8. Contacto de Gestión Humana 👥"
         + "\n9. Hablar con un asesor 🧑‍💼"
         + "\n0. Ya no necesito ayuda. ¡Gracias! 👋"
         + "\n\nResponde con el *número* de la opción."
@@ -214,6 +215,22 @@ def _mensaje_sin_soporte(empresa: Empresa) -> str:
         "departamento de Gestión Humana:\n"
         f"👤 {nombre}\n\n"
         f"📲 {celular} (WhatsApp)"
+    )
+
+
+def _mensaje_contacto_gh(empresa: Empresa | None) -> str:
+    """Datos de contacto de Gestión Humana de la empresa."""
+    nombre = empresa.gestion_humana_nombre if empresa else None
+    celular = empresa.gestion_humana_celular if empresa else None
+    if not nombre and not celular:
+        return (
+            "Por ahora no tengo registrado el contacto de Gestión Humana de tu "
+            "empresa. 🙏 Si lo necesitas, escribe *9* para hablar con un asesor."
+        )
+    return (
+        "👥 Este es el contacto de Gestión Humana de tu empresa:\n"
+        f"👤 {nombre or '—'}\n"
+        f"📲 {celular or '—'} (WhatsApp)"
     )
 
 
@@ -470,6 +487,16 @@ async def procesar_mensaje(
                 "Con gusto 🙌 Le aviso a un asesor para que te contacte. "
                 "En un momento se comunican contigo.",
             )
+            return
+
+        # Opción 8: contacto de Gestión Humana de la empresa.
+        if texto.strip() == "8":
+            empresa = db.get(Empresa, conv.empresa_id) if conv.empresa_id else None
+            await _responder(db, telefono, _mensaje_contacto_gh(empresa))
+            conv.estado = "preguntando_mas"
+            conv.opciones = None
+            db.commit()
+            await _responder(db, telefono, "¿Te puedo ayudar con algo más?\n\n1. Sí\n2. No")
             return
 
         # Primero por número del menú; si no, por texto libre.
