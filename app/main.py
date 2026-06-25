@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import secrets
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -8,10 +10,44 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.core.config import settings
+from app.core.db import SessionLocal
 from app.core.seguridad import NoAutenticado
 from app.routers import admin, panel, usuarios, webhook
+from app.servicios.flujo import cerrar_conversaciones_inactivas
 
 logger = logging.getLogger(__name__)
+
+# Cada cuánto se revisan las conversaciones para cerrarlas por inactividad.
+INTERVALO_CIERRE_INACTIVAS = 15 * 60  # segundos
+
+
+async def _bucle_cierre_inactivas() -> None:
+    """Tarea de fondo: cierra periódicamente las conversaciones del bot inactivas."""
+    while True:
+        try:
+            db = SessionLocal()
+            try:
+                await cerrar_conversaciones_inactivas(db)
+            finally:
+                db.close()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Error en el cierre automático de conversaciones inactivas.")
+        await asyncio.sleep(INTERVALO_CIERRE_INACTIVAS)
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    tarea = asyncio.create_task(_bucle_cierre_inactivas())
+    try:
+        yield
+    finally:
+        tarea.cancel()
+        try:
+            await tarea
+        except asyncio.CancelledError:
+            pass
 
 
 def _init_sentry() -> None:
@@ -36,7 +72,7 @@ def create_app() -> FastAPI:
     # El esquema de la BD se gestiona con Alembic (`alembic upgrade head`).
     _init_sentry()
 
-    app = FastAPI(title=settings.app_name, debug=settings.debug)
+    app = FastAPI(title=settings.app_name, debug=settings.debug, lifespan=_lifespan)
 
     secret = settings.session_secret
     if not secret:

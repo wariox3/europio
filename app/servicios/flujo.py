@@ -2,6 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -19,8 +20,19 @@ logger = logging.getLogger(__name__)
 MAX_OPCIONES = 9  # mantiene el menú corto y los números en un solo dígito
 INACTIVIDAD = timedelta(hours=1)  # tras este tiempo, el siguiente mensaje reinicia
 AUTO_CIERRE_ASESOR = timedelta(hours=24)  # auto-cierre de seguridad si nadie atiende
+AUTO_CIERRE_BOT = timedelta(hours=3)  # cierra conversaciones del bot inactivas
 MAX_INTENTOS_EMPRESA = 3  # intentos de identificar empresa antes de escalar
 RESPUESTAS_NO = {"2", "no", "no gracias", "no, gracias", "salir", "nada", "ninguna"}
+
+# Estados que NO gestiona el bot (un humano o ya cerrada): se excluyen del
+# auto-cierre por inactividad.
+ESTADOS_NO_BOT = ("con_asesor", "finalizada")
+
+MENSAJE_CIERRE_BOT = (
+    "Cerramos esta conversación por inactividad ⏳. "
+    "Cuando lo necesites, escríbenos de nuevo a nuestro canal de soporte. "
+    "¡Que tengas un excelente día! 👋"
+)
 
 
 def _ahora() -> datetime:
@@ -62,6 +74,35 @@ async def _responder(db: Session, telefono: str, texto: str) -> None:
     """Registra el mensaje saliente en el historial y lo envía por WhatsApp."""
     registrar_mensaje(db, telefono, "saliente", texto)
     await enviar_mensaje(telefono, texto)
+
+
+async def cerrar_conversaciones_inactivas(db: Session) -> int:
+    """Cierra las conversaciones a cargo del bot inactivas por más de AUTO_CIERRE_BOT.
+
+    El UPDATE ... RETURNING es atómico: aunque corran varios workers a la vez,
+    cada conversación la reclama (y avisa) uno solo. Devuelve cuántas cerró.
+    """
+    limite = _ahora() - AUTO_CIERRE_BOT
+    telefonos = db.execute(
+        update(Conversacion)
+        .where(
+            Conversacion.estado.notin_(ESTADOS_NO_BOT),
+            Conversacion.actualizado_en < limite,
+        )
+        .values(estado="finalizada", cerrada_en=_ahora(), opciones=None)
+        .returning(Conversacion.telefono)
+    ).scalars().all()
+    db.commit()
+
+    for telefono in telefonos:
+        try:
+            registrar_mensaje(db, telefono, "saliente", MENSAJE_CIERRE_BOT)
+            await enviar_mensaje(telefono, MENSAJE_CIERRE_BOT)
+        except Exception:
+            logger.exception("Error enviando cierre por inactividad a %s", telefono)
+    if telefonos:
+        logger.info("Cierre por inactividad: %d conversación(es).", len(telefonos))
+    return len(telefonos)
 
 
 def _url_publica(ruta: str) -> str:

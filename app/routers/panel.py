@@ -17,7 +17,7 @@ from app.modelos.empresa import Empresa
 from app.modelos.escalamiento import Escalamiento
 from app.modelos.mensaje import Mensaje
 from app.modelos.usuario import Usuario
-from app.servicios.flujo import crear_escalamiento, registrar_mensaje
+from app.servicios.flujo import MENSAJE_CIERRE_BOT, crear_escalamiento, registrar_mensaje
 from app.servicios.whatsapp import enviar_imagen, enviar_mensaje
 
 logger = logging.getLogger(__name__)
@@ -343,9 +343,11 @@ async def cerrar(
     usuario: Usuario = Depends(usuario_actual),
 ):
     conv = db.query(Conversacion).filter(Conversacion.telefono == telefono).first()
-    # Solo se despide al usuario si la conversación la estaba atendiendo un asesor;
-    # si la gestionaba el bot, se cierra en silencio (sin enviar mensaje).
+    # Mensaje de cierre según quién la atendía: despedida del asesor si la llevaba
+    # un humano, o aviso de cierre por inactividad si la gestionaba el bot.
+    abierta = conv is not None and conv.estado != "finalizada"
     cerrada_por_asesor = conv is not None and conv.estado == "con_asesor"
+    mensaje_cierre = MENSAJE_CIERRE_ASESOR if cerrada_por_asesor else MENSAJE_CIERRE_BOT
     if conv is not None:
         conv.estado = "finalizada"
         conv.cerrada_en = datetime.now(timezone.utc)
@@ -354,11 +356,11 @@ async def cerrar(
         Escalamiento.telefono == telefono, Escalamiento.atendido.is_(False)
     ).update({"atendido": True})
     db.commit()
-    # Despedida del asesor: avisa al usuario del cierre y lo deja en el historial.
-    if cerrada_por_asesor:
+    # Avisa al usuario del cierre y lo deja en el historial.
+    if abierta:
         try:
-            await enviar_mensaje(telefono, MENSAJE_CIERRE_ASESOR)
-            registrar_mensaje(db, telefono, "saliente", MENSAJE_CIERRE_ASESOR, usuario_id=usuario.id)
+            await enviar_mensaje(telefono, mensaje_cierre)
+            registrar_mensaje(db, telefono, "saliente", mensaje_cierre, usuario_id=usuario.id)
         except Exception:
             logger.exception("Error enviando despedida de cierre a %s", telefono)
     # Recarga completa para refrescar la lista de la izquierda.
