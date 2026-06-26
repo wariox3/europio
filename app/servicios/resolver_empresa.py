@@ -50,16 +50,49 @@ def resolver_empresa(texto_usuario: str, empresas: list[Empresa]) -> dict:
     if len(texto_norm.split()) > MAX_PALABRAS_NOMBRE:
         return {"match": None, "candidatos": []}
 
+    # Coincidencia exacta: si el texto es idéntico a un nombre o alias, resuelve
+    # sin pasar por el fuzzy. El token_ratio da 100 también cuando el texto es
+    # subconjunto de otra variante (p. ej. el alias "eurovic" contra "eurovic
+    # cali"), así que la igualdad literal es lo único que distingue cuántas
+    # empresas coinciden de verdad: una -> match; varias (alias compartido) ->
+    # candidatos para desambiguar.
+    exactas: list[int] = []
+    for clave, v in candidatos_texto.items():
+        if v == texto_norm:
+            empresa_id = clave_a_empresa[clave]
+            if empresa_id not in exactas:
+                exactas.append(empresa_id)
+    if len(exactas) == 1:
+        return {"match": exactas[0], "candidatos": []}
+    if len(exactas) > 1:
+        return {"match": None, "candidatos": exactas}
+
     # token_ratio (no WRatio): no usa partial_ratio, que premiaba que el nombre
     # corto apareciera como subcadena dentro de una frase larga e inflaba el score.
-    resultados = process.extract(texto_norm, candidatos_texto, scorer=fuzz.token_ratio, limit=5)
+    # limit alto: con empresas que comparten alias, un tope bajo dejaría fuera
+    # coincidencias válidas que empatan en score.
+    resultados = process.extract(
+        texto_norm, candidatos_texto, scorer=fuzz.token_ratio,
+        limit=len(candidatos_texto),
+    )
     if not resultados:
         return {"match": None, "candidatos": []}
 
     # resultados: lista de (texto, score, clave)
-    mejor = resultados[0]
-    if mejor[1] >= UMBRAL_MATCH:
-        return {"match": clave_a_empresa[mejor[2]], "candidatos": []}
+    mejor_score = resultados[0][1]
+    if mejor_score >= UMBRAL_MATCH:
+        # Varias empresas pueden empatar en el mejor score (p. ej. comparten
+        # alias). Solo auto-resolvemos si una única empresa lo alcanza; si hay
+        # empate, las ofrecemos como candidatos para que el usuario desambigüe.
+        empresas_match: list[int] = []
+        for _, score, clave in resultados:
+            if score == mejor_score:
+                empresa_id = clave_a_empresa[clave]
+                if empresa_id not in empresas_match:
+                    empresas_match.append(empresa_id)
+        if len(empresas_match) == 1:
+            return {"match": empresas_match[0], "candidatos": []}
+        return {"match": None, "candidatos": empresas_match}
 
     candidatos: list[int] = []
     for _, score, clave in resultados:
