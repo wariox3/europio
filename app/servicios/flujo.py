@@ -24,6 +24,17 @@ AUTO_CIERRE_BOT = timedelta(hours=3)  # cierra conversaciones del bot inactivas
 MAX_INTENTOS_EMPRESA = 3  # intentos de identificar empresa antes de escalar
 RESPUESTAS_NO = {"2", "no", "no gracias", "no, gracias", "salir", "nada", "ninguna"}
 
+# Anti-ráfaga (rate limit por par de WhatsApp, error #131056): si el bot ya envió
+# demasiados mensajes a un mismo número en una ventana corta, deja de responder
+# hasta que el usuario baje el ritmo. Evita acumular salientes que Meta rechaza.
+VENTANA_THROTTLE = timedelta(seconds=15)
+MAX_SALIENTES_VENTANA = 6
+
+MENSAJE_THROTTLE = (
+    "⏳ Estás enviando mensajes muy rápido. Dame un momento para atenderte 🙏. "
+    "Espera unos segundos y vuelve a escribir."
+)
+
 # Estados que NO gestiona el bot (un humano o ya cerrada): se excluyen del
 # auto-cierre por inactividad.
 ESTADOS_NO_BOT = ("con_asesor", "finalizada")
@@ -37,6 +48,20 @@ MENSAJE_CIERRE_BOT = (
 
 def _ahora() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _salientes_recientes(db: Session, telefono: str) -> int:
+    """Cuántos mensajes ha enviado el bot a este número en la ventana anti-ráfaga."""
+    desde = _ahora() - VENTANA_THROTTLE
+    return (
+        db.query(Mensaje)
+        .filter(
+            Mensaje.telefono == telefono,
+            Mensaje.direccion == "saliente",
+            Mensaje.creado_en >= desde,
+        )
+        .count()
+    )
 
 
 def _inactiva(conv: Conversacion, limite: timedelta) -> bool:
@@ -359,6 +384,17 @@ async def procesar_mensaje(
             conv.no_leidos = (conv.no_leidos or 0) + 1
             db.commit()
             return
+
+    # Anti-ráfaga: si ya enviamos demasiados mensajes a este número en la ventana,
+    # avisamos UNA sola vez (el saliente que justo alcanza el tope) y luego callamos.
+    # El entrante ya quedó registrado arriba; aquí solo decidimos no responder.
+    salientes = _salientes_recientes(db, telefono)
+    if salientes >= MAX_SALIENTES_VENTANA:
+        if salientes == MAX_SALIENTES_VENTANA:
+            await _responder(db, telefono, MENSAJE_THROTTLE)
+        else:
+            logger.info("Throttle: silencio para %s (%d salientes en ventana).", telefono, salientes)
+        return
 
     # Si no es texto, no altera el estado de la conversación.
     if es_no_texto:

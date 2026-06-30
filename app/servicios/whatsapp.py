@@ -16,9 +16,24 @@ async def _post(payload: dict) -> None:
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(settings.whatsapp_api_url, json=payload, headers=headers)
         if resp.status_code >= 400:
+            # Rate limit por par (#131056): backpressure esperado cuando un usuario
+            # escribe en ráfaga. Reintentar no ayuda, así que lo registramos como
+            # warning y no lo propagamos (no debe ensuciar Sentry como error).
+            if _es_rate_limit_par(resp):
+                logger.warning("WhatsApp rate limit por par (#131056) hacia %s; mensaje omitido.",
+                               payload.get("to"))
+                return
             # Registra el detalle del error de la API de Meta (token inválido, etc.).
             logger.error("WhatsApp API %s: %s", resp.status_code, resp.text)
             resp.raise_for_status()
+
+
+def _es_rate_limit_par(resp: "httpx.Response") -> bool:
+    """True si el error de Meta es el rate limit por par Business↔Consumer (#131056)."""
+    try:
+        return resp.json().get("error", {}).get("code") == 131056
+    except ValueError:
+        return False
 
 
 async def enviar_mensaje(telefono: str, texto: str) -> None:
